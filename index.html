@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Viagem Limno 2026 · Fotos, mapa e zoeira</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;600;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#122a33; --ink-soft:#5f7580; --paper:#ffffff; --linha:#dcebf0;
+  --agua-deep:#0f4c5c; --agua-mid:#2b8ca8; --agua-clara:#e4f3f7;
+  --areia:#d98e3c; --areia-light:#fdf0df; --verde:#3f7b54;
+  --sombra:0 18px 40px rgba(18,42,51,.12);
+}
+html,body{height:100%;background:var(--paper);font-family:'Source Sans 3',sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;overflow-x:hidden;}
+header{max-width:960px;margin:0 auto;padding:22px 20px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.brand-txt h1{font-family:'Fraunces',serif;font-size:1.7rem;font-weight:600;line-height:1.05;color:var(--agua-deep);}
+.brand-txt p{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--areia);margin-top:4px;font-weight:800}
+.h-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:none;cursor:pointer;font-family:'Source Sans 3',sans-serif;font-weight:800;border-radius:12px;transition:transform .15s,box-shadow .15s,background .2s;}
+.btn:active{transform:scale(.96)}
+.btn-ghost{background:#fff;border:1.5px solid var(--linha);color:var(--ink-soft);padding:9px 13px;font-size:.8rem;}
+.btn-ghost:hover{border-color:var(--agua-mid);color:var(--agua-deep)}
+.btn-destaque{background:var(--agua-mid);color:#fff;padding:9px 15px;font-size:.8rem;border:1.5px solid var(--agua-mid)}
+.btn-destaque:hover{background:var(--agua-deep);border-color:var(--agua-deep)}
+.chip-user{display:flex;align-items:center;gap:7px;background:#fff;border:1.5px solid var(--linha);border-radius:22px;padding:7px 14px;font-size:.8rem;font-weight:800;cursor:pointer;color:var(--ink);}
+.chip-user b{color:var(--agua-deep);font-weight:800}
+.chip-user img{width:22px;height:22px;border-radius:50%;object-fit:cover;}
+.contador{font-size:.74rem;color:var(--ink-soft);font-weight:800;white-space:nowrap}
+.faixa-voto{max-width:960px;margin:6px auto 0;padding:0 20px;}
+.faixa-voto .inner{background:var(--agua-clara);border:1px solid var(--linha);border-radius:12px;padding:10px 16px;font-size:.82rem;color:var(--agua-deep);font-weight:600;display:flex;align-items:center;gap:8px;justify-content:center;text-align:center;}
+.faixa-voto .inner.fechada{background:var(--areia-light);color:var(--areia)}
+.contador-regr{max-width:960px;margin:8px auto 0;padding:8px 20px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:.92rem;font-weight:800;color:var(--areia)}
+.contador-regr b{color:var(--agua-deep);font-variant-numeric:tabular-nums}
+.stage{position:relative;max-width:1100px;margin:10px auto 0;height:52vh;min-height:350px;max-height:520px;perspective:1400px;touch-action:pan-y;user-select:none;}
+.card{position:absolute;top:50%;left:50%;width:min(340px,72vw);cursor:pointer;background:#fff;padding:12px 12px 50px;border:1px solid var(--linha);border-radius:6px;box-shadow:var(--sombra);transform-origin:center center;transition:transform .45s cubic-bezier(.22,.9,.3,1),opacity .45s,filter .45s;will-change:transform,opacity;}
+.card.dragging{transition:none}
+.card .imgbox{width:100%;aspect-ratio:4/3;background:#eef6f8;border-radius:3px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.card .imgbox img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+.card .imgbox.carregando{color:var(--ink-soft);font-size:.8rem;font-weight:700;}
+.card .fita{position:absolute;top:-11px;left:50%;transform:translateX(-50%) rotate(-3deg);width:88px;height:24px;background:var(--agua-mid);opacity:.9;border-radius:2px;box-shadow:0 2px 5px rgba(0,0,0,.12);}
+.card:nth-child(even) .fita{transform:translateX(-50%) rotate(2.5deg)}
+.card .legenda{position:absolute;left:0;right:0;bottom:9px;text-align:center;font-family:'Fraunces',serif;font-size:1.05rem;padding:0 14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);}
+.card .votos-mini{position:absolute;top:18px;right:18px;background:rgba(255,255,255,.94);border-radius:20px;padding:4px 10px;font-size:.72rem;font-weight:800;color:var(--agua-deep);box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:4px;}
+.card .selo-meu{position:absolute;top:18px;left:18px;background:var(--areia);color:#fff;border-radius:20px;padding:4px 10px;font-size:.66rem;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.card .pin-geo{position:absolute;bottom:56px;left:16px;background:rgba(255,255,255,.94);border-radius:16px;padding:3px 9px;font-size:.68rem;font-weight:800;color:var(--verde);box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.nav{position:absolute;top:50%;transform:translateY(-50%);z-index:30;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--linha);background:rgba(255,255,255,.92);color:var(--agua-deep);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;backdrop-filter:blur(4px);}
+.nav:hover{border-color:var(--agua-mid);background:#fff}
+#navL{left:12px}#navR{right:12px}
+.acao-bar{max-width:680px;margin:14px auto 0;padding:0 20px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.foto-info{text-align:center}
+.foto-info h2{font-family:'Fraunces',serif;font-size:1.4rem;line-height:1.15;color:var(--agua-deep)}
+.foto-info p{font-size:.82rem;color:var(--ink-soft);margin-top:3px}
+.foto-info .local-linha{font-size:.78rem;color:var(--verde);font-weight:700;margin-top:4px;cursor:pointer}
+.reacoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center}
+.btn-votar{display:flex;align-items:center;gap:8px;padding:12px 26px;border-radius:26px;border:2px solid var(--agua-mid);background:var(--agua-mid);color:#fff;cursor:pointer;font-family:'Source Sans 3',sans-serif;font-size:1rem;font-weight:800;transition:all .15s;}
+.btn-votar:hover{background:var(--agua-deep);border-color:var(--agua-deep);transform:translateY(-2px)}
+.btn-votar:active{transform:scale(.95)}
+.btn-votar.votado{background:#fff;color:var(--agua-deep);border-color:var(--agua-deep);cursor:default}
+.btn-votar:disabled{opacity:.5;cursor:not-allowed;background:var(--ink-soft);border-color:var(--ink-soft)}
+.btn-votar.pop{animation:pop .35s ease}
+@keyframes pop{40%{transform:scale(1.18)}}
+.chip{display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:24px;border:1.5px solid var(--linha);background:#fff;cursor:pointer;font-family:'Source Sans 3',sans-serif;font-size:.9rem;font-weight:800;color:var(--ink-soft);transition:all .15s;}
+.chip:hover{border-color:var(--agua-mid);transform:translateY(-2px)}
+.chip-coment{background:var(--agua-deep);border-color:var(--agua-deep);color:#fff}
+.chip-coment:hover{background:#0a3a46;color:#fff}
+/* barra de reacoes emoji */
+.emoji-bar{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:600px}
+.emoji-btn{display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;border:1.5px solid var(--linha);background:#fff;cursor:pointer;font-size:1rem;font-weight:800;color:var(--ink-soft);transition:all .13s;font-family:'Source Sans 3',sans-serif;line-height:1}
+.emoji-btn:hover{border-color:var(--agua-mid);transform:translateY(-2px)}
+.emoji-btn.ativo{background:var(--agua-clara);border-color:var(--agua-mid);color:var(--agua-deep)}
+.emoji-btn .n{font-size:.8rem;font-variant-numeric:tabular-nums}
+.emoji-btn.pulse{animation:pop .3s ease}
+.dots{display:flex;gap:5px;justify-content:center;margin:16px auto 30px;flex-wrap:wrap;max-width:70vw;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--linha);cursor:pointer;transition:all .3s;border:none;padding:0}
+.dot.on{width:20px;border-radius:4px;background:var(--agua-mid)}
+.estado{max-width:440px;margin:60px auto;text-align:center;padding:0 20px;}
+.estado .icone{font-size:3rem;margin-bottom:10px}
+.estado h2{font-family:'Fraunces',serif;font-size:1.7rem;margin-bottom:8px;color:var(--agua-deep)}
+.estado p{color:var(--ink-soft);font-size:.9rem;line-height:1.55;margin-bottom:18px}
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(18,42,51,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .25s;}
+.overlay.open{opacity:1;pointer-events:all}
+.modal-box{background:#fff;border-radius:18px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;padding:26px;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.3);}
+.modal-box.largo{max-width:900px;padding:20px}
+.modal-box h3{font-family:'Fraunces',serif;font-size:1.5rem;margin-bottom:4px;color:var(--agua-deep)}
+.modal-box .sub{font-size:.85rem;color:var(--ink-soft);margin-bottom:16px;line-height:1.5}
+.fechar{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:none;background:#eef6f8;color:var(--ink-soft);font-size:1rem;cursor:pointer;z-index:1000;}
+.fechar:hover{background:#e0eef2}
+label{display:block;font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin:14px 0 5px;}
+input[type=text],input[type=password],input[type=datetime-local],textarea,select{width:100%;border:1.5px solid var(--linha);border-radius:10px;padding:11px 13px;font-family:'Source Sans 3',sans-serif;font-size:.9rem;color:var(--ink);outline:none;background:#fff;resize:none;}
+input:focus,textarea:focus{border-color:var(--agua-mid)}
+.drop{border:2px dashed var(--linha);border-radius:14px;padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .2s;color:var(--ink-soft);font-size:.85rem;font-weight:700;}
+.drop:hover,.drop.over{border-color:var(--agua-mid);color:var(--agua-deep)}
+.previews{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.previews img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--linha)}
+.btn-salvar{width:100%;margin-top:20px;background:var(--agua-mid);color:#fff;padding:14px;font-size:.95rem;box-shadow:0 6px 16px rgba(43,140,168,.32);}
+.btn-salvar:hover{background:var(--agua-deep)}
+.btn-salvar:disabled{opacity:.55;cursor:wait}
+.btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;border:1.5px solid var(--linha);color:var(--ink);padding:13px;font-size:.92rem;font-weight:800;border-radius:12px;cursor:pointer;margin-top:6px;transition:all .15s}
+.btn-google:hover{border-color:var(--agua-mid);background:#fafdfe}
+.btn-google img{width:20px;height:20px}
+.aviso-envio{font-size:.8rem;color:var(--ink-soft);text-align:center;margin-top:12px;line-height:1.5}
+.geo-box{margin-top:14px;border:1.5px solid var(--linha);border-radius:12px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.geo-box .txt{font-size:.84rem;font-weight:700;color:var(--ink);line-height:1.4}
+.geo-box .txt small{display:block;font-weight:600;color:var(--ink-soft);font-size:.74rem;margin-top:3px}
+.geo-box.ok{border-color:var(--verde);background:#f2f9f4}
+.geo-box.ok .txt{color:var(--verde)}
+.geo-btn{background:var(--verde);color:#fff;border:none;border-radius:10px;padding:9px 13px;font-size:.8rem;font-weight:800;cursor:pointer;flex-shrink:0;font-family:'Source Sans 3',sans-serif}
+.adm-lista{margin-bottom:14px;max-height:240px;overflow-y:auto;display:none}
+.adm-lista.on{display:block}
+.adm-foto{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef6f8}
+.adm-foto:last-child{border-bottom:none}
+.adm-foto .mini{width:44px;height:44px;border-radius:6px;object-fit:cover;background:#eef6f8;flex-shrink:0}
+.adm-foto .info{flex:1;min-width:0}
+.adm-foto .info b{display:block;font-size:.84rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-foto .info span{font-size:.74rem;color:var(--ink-soft)}
+.adm-del{background:#fff;border:1.5px solid #e0b4b4;color:#b44;border-radius:8px;padding:6px 10px;font-size:.76rem;font-weight:800;cursor:pointer;flex-shrink:0}
+.adm-del:hover{background:#fdecec}
+.admin-status{background:var(--agua-clara);border-radius:10px;padding:12px 14px;font-size:.82rem;color:var(--agua-deep);margin-bottom:14px;font-weight:600;}
+.toggle-linha{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border:1.5px solid var(--linha);border-radius:12px;margin-top:8px;}
+.toggle-linha .txt{font-size:.86rem;font-weight:700;color:var(--ink)}
+.toggle-linha .txt small{display:block;font-weight:600;color:var(--ink-soft);font-size:.74rem;margin-top:2px}
+.switch{position:relative;width:52px;height:30px;flex-shrink:0;cursor:pointer}
+.switch input{display:none}
+.switch .slider{position:absolute;inset:0;background:var(--linha);border-radius:30px;transition:.2s}
+.switch .slider::before{content:"";position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.switch input:checked + .slider{background:var(--agua-mid)}
+.switch input:checked + .slider::before{transform:translateX(22px)}
+.divisor{height:1px;background:var(--linha);margin:18px 0}
+.viewer{position:fixed;inset:0;z-index:300;background:#fff;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s;}
+.viewer.open{opacity:1;pointer-events:all}
+.v-top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--linha);gap:10px;flex-shrink:0;flex-wrap:wrap;}
+.v-title{min-width:0;flex:1}
+.v-title h3{font-family:'Fraunces',serif;font-size:1.25rem;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--agua-deep)}
+.v-title p{font-size:.74rem;color:var(--ink-soft);margin-top:2px}
+.v-tools{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.tool{height:38px;min-width:38px;padding:0 12px;border-radius:10px;border:1.5px solid var(--linha);background:#fff;color:var(--ink-soft);font-size:.9rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;font-family:'Source Sans 3',sans-serif;}
+.tool:hover{border-color:var(--agua-mid);color:var(--agua-deep)}
+.tool-votar{background:var(--agua-mid);border-color:var(--agua-mid);color:#fff}
+.tool-votar:hover{background:var(--agua-deep);color:#fff;border-color:var(--agua-deep)}
+.tool-votar.votado{background:#fff;color:var(--agua-deep)}
+.tool-votar:disabled{opacity:.5;cursor:not-allowed}
+.v-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px;overflow:hidden;background:#f7fbfc;position:relative;}
+.v-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;transition:transform .35s;cursor:zoom-in;}
+.v-img img.zoom{cursor:zoom-out}
+.v-emoji{flex-shrink:0;padding:9px 12px;border-top:1px solid var(--linha);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;background:#fff}
+.v-comentarios{flex-shrink:0;border-top:1px solid var(--linha);max-height:38vh;display:flex;flex-direction:column;background:#fff;}
+.c-head{padding:10px 16px 4px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.c-head span{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--agua-deep)}
+.c-count{color:var(--ink-soft)!important}
+.c-lista{flex:1;overflow-y:auto;padding:4px 16px;min-height:60px}
+.c-item{padding:9px 0;border-bottom:1px solid #eef6f8;position:relative}
+.c-item:last-child{border-bottom:none}
+.c-autor{font-size:.78rem;font-weight:800;color:var(--agua-deep);display:flex;align-items:center;gap:6px}
+.c-autor img{width:18px;height:18px;border-radius:50%}
+.c-texto{font-size:.88rem;line-height:1.45;margin-top:3px}
+.c-data{font-size:.68rem;color:#a9bcc4;margin-top:2px}
+.c-apagar{position:absolute;top:8px;right:0;background:none;border:none;color:#c99;font-size:.72rem;font-weight:800;cursor:pointer;padding:2px 6px}
+.c-apagar:hover{color:#b44}
+.sem-coment{font-size:.85rem;color:var(--ink-soft);font-style:italic;text-align:center;padding:16px 0}
+.c-form{flex-shrink:0;display:flex;gap:8px;padding:10px 16px 14px;border-top:1px solid #eef6f8;align-items:flex-end;}
+.c-form textarea{flex:1}
+.c-form .btn-env{background:var(--agua-deep);color:#fff;padding:11px 16px;font-size:.85rem;flex-shrink:0;}
+.c-login-aviso{padding:14px 16px;text-align:center;font-size:.84rem;color:var(--ink-soft);border-top:1px solid #eef6f8}
+.c-login-aviso a{color:var(--agua-deep);font-weight:800;cursor:pointer;text-decoration:underline}
+.rank-item{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #eef6f8;cursor:pointer;}
+.rank-item:last-child{border-bottom:none}
+.rank-item .rimg{width:58px;height:58px;border-radius:8px;border:1px solid var(--linha);background:#eef6f8;overflow:hidden;flex-shrink:0}
+.rank-item .rimg img{width:100%;height:100%;object-fit:cover}
+.rank-pos{font-size:1.4rem;width:36px;text-align:center}
+.rank-info{flex:1;min-width:0}
+.rank-info b{display:block;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.rank-info span{font-size:.76rem;color:var(--ink-soft)}
+.rank-votos{font-weight:900;color:var(--agua-deep);font-size:.92rem;white-space:nowrap}
+/* mapa */
+#mapa{width:100%;height:min(62vh,520px);border-radius:12px;border:1px solid var(--linha);background:#eef6f8}
+.mapa-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding-right:44px}
+.mapa-topo h3{margin:0}
+.mapa-filtro{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mapa-filtro select{width:auto;min-width:150px;padding:8px 11px;font-size:.84rem;font-weight:700}
+.mapa-legenda{font-size:.78rem;color:var(--ink-soft);margin-top:9px;line-height:1.5}
+.pop-mini{width:150px}
+.pop-mini img{width:100%;border-radius:6px;display:block;margin-bottom:5px}
+.pop-mini b{font-size:.85rem;color:var(--agua-deep);font-family:'Fraunces',serif}
+.pop-mini span{display:block;font-size:.74rem;color:var(--ink-soft);margin-top:2px}
+.pop-mini button{margin-top:6px;width:100%;background:var(--agua-mid);color:#fff;border:none;border-radius:8px;padding:6px;font-size:.76rem;font-weight:800;cursor:pointer;font-family:'Source Sans 3',sans-serif}
+.leaflet-container{font-family:'Source Sans 3',sans-serif}
+.floater{position:fixed;bottom:-50px;z-index:890;font-size:2rem;pointer-events:none;animation:subir var(--dur) ease-out forwards;opacity:0;}
+@keyframes subir{0%{transform:translateY(0) translateX(0) rotate(0deg) scale(.6);opacity:0}12%{opacity:1}100%{transform:translateY(-105vh) translateX(var(--drift)) rotate(var(--giro)) scale(1.15);opacity:0}}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:.85rem;font-weight:700;z-index:950;transition:transform .3s;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:90vw;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0)}
+@media (max-width:560px){header{padding:16px 14px 4px}.brand-txt h1{font-size:1.35rem}.stage{height:46vh;min-height:310px}.modal-box{padding:20px 16px}#mapa{height:58vh}}
+@media (prefers-reduced-motion:reduce){.card{transition:none}.floater{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-txt">
+      <h1>Viagem Limno 2026</h1>
+      <p>Fotos · mapa da viagem · zoeira liberada</p>
+    </div>
+  </div>
+  <div class="h-actions">
+    <span class="contador" id="contador"></span>
+    <button class="btn btn-destaque" id="btnEnviar">📷 Enviar foto</button>
+    <button class="btn btn-ghost" id="btnMapa" title="Mapa">🗺️ Mapa</button>
+    <button class="btn btn-ghost" id="btnRank" title="Ranking">🏆 Ranking</button>
+    <button class="chip-user" id="chipUser" title="Entrar">👤 <b id="userNome">entrar</b></button>
+  </div>
+</header>
+
+<div class="faixa-voto" id="faixaVoto">
+  <div class="inner" id="faixaVotoTxt">Carregando...</div>
+</div>
+
+<div class="contador-regr" id="contadorRegressivo" style="display:none"></div>
+<div class="stage" id="stage"></div>
+<button class="nav" id="navL" style="display:none">←</button>
+<button class="nav" id="navR" style="display:none">→</button>
+
+<div class="acao-bar" id="acaoBar" style="display:none">
+  <div class="foto-info">
+    <h2 id="infoTitulo"></h2>
+    <p id="infoMeta"></p>
+    <div class="local-linha" id="infoLocal" style="display:none"></div>
+  </div>
+  <div class="reacoes">
+    <button class="btn-votar" id="btnVotar">🗳️ Votar nesta foto</button>
+    <button class="chip chip-coment" id="chipComent">💬 <span class="n" id="nComent">0</span></button>
+  </div>
+  <div class="emoji-bar" id="emojiBar"></div>
+</div>
+<div class="dots" id="dots"></div>
+
+<div class="estado" id="estadoVazio" style="display:none">
+  <div class="icone">📸</div>
+  <h2>Nenhuma foto ainda</h2>
+  <p>Seja o primeiro a mandar. Toque em Enviar foto, deixe marcar sua posição e comece o rastro da viagem.</p>
+</div>
+<div class="estado" id="estadoCarregando">
+  <div class="icone">🌊</div>
+  <h2>Carregando a viagem...</h2>
+</div>
+
+<!-- Login -->
+<div class="overlay" id="ovLogin">
+  <div class="modal-box">
+    <button class="fechar" onclick="fecharLogin()">✕</button>
+    <h3>Entrar</h3>
+    <p class="sub">Entre com sua conta Google para enviar foto, votar, reagir e comentar. Um voto por pessoa, e o voto pode ser trocado.</p>
+    <button class="btn-google" onclick="loginGoogle()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="">
+      Entrar com Google
+    </button>
+    <div class="aviso-envio">Sua conta serve para identificar quem enviou e garantir um voto por pessoa. O e-mail não é publicado.</div>
+  </div>
+</div>
+
+<!-- Enviar foto (participante) -->
+<div class="overlay" id="ovEnviar">
+  <div class="modal-box">
+    <button class="fechar" onclick="document.getElementById('ovEnviar').classList.remove('open')">✕</button>
+    <h3>Enviar sua foto</h3>
+    <p class="sub">A foto entra na galeria e o ponto marcado entra no mapa da viagem.</p>
+
+    <label for="pTitulo">Título ou legenda</label>
+    <input type="text" id="pTitulo" maxlength="80" placeholder="Ex: coleta no meio do rio">
+    <label for="pLocal">Nome do lugar (opcional)</label>
+    <input type="text" id="pLocal" maxlength="60" placeholder="Ex: Baía do Sinhá Mariana">
+    <label>Imagem</label>
+    <div class="drop" id="dropArea">Toque para escolher ou tirar a foto</div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <div class="previews" id="previews"></div>
+
+    <div class="geo-box" id="geoBox">
+      <div class="txt" id="geoTxt">Marcar minha posição agora
+        <small>Sem isso a foto entra na galeria, mas fica fora do mapa.</small>
+      </div>
+      <button class="geo-btn" id="geoBtn" onclick="pegarLocal()">📍 Marcar</button>
+    </div>
+
+    <button class="btn btn-salvar" id="btnPublicar" onclick="publicarFoto()">Publicar foto</button>
+    <div class="aviso-envio">A imagem é reduzida para no máximo 1280px antes de subir. Fotos de celular funcionam bem.</div>
+  </div>
+</div>
+
+<!-- Mapa -->
+<div class="overlay" id="ovMapa">
+  <div class="modal-box largo">
+    <button class="fechar" onclick="fecharMapa()">✕</button>
+    <div class="mapa-topo">
+      <h3>Rastro da viagem</h3>
+      <div class="mapa-filtro">
+        <select id="filtroPessoa" onchange="desenharMapa()">
+          <option value="">Todo mundo</option>
+        </select>
+        <button class="btn btn-ghost" onclick="ajustarMapa()">⤢ Enquadrar</button>
+      </div>
+    </div>
+    <div id="mapa"></div>
+    <div class="mapa-legenda" id="mapaLegenda"></div>
+  </div>
+</div>
+
+<!-- Ranking -->
+<div class="overlay" id="ovRank">
+  <div class="modal-box">
+    <button class="fechar" onclick="document.getElementById('ovRank').classList.remove('open')">✕</button>
+    <h3>Ranking</h3>
+    <p class="sub">As fotos mais votadas até agora.</p>
+    <div id="rankLista"></div>
+  </div>
+</div>
+
+<!-- Admin -->
+<div class="overlay" id="ovAdmin">
+  <div class="modal-box">
+    <button class="fechar" onclick="fecharAdmin()">✕</button>
+    <h3>Área da organização</h3>
+    <p class="sub">Controle da votação e moderação das fotos.</p>
+    <div id="adminLogin">
+      <label for="admCodigo">Código da organização</label>
+      <input type="password" id="admCodigo" placeholder="Digite o código">
+      <button class="btn btn-salvar" onclick="entrarAdmin()">Acessar</button>
+    </div>
+    <div id="adminPainel" style="display:none">
+      <div class="admin-status" id="admContagem">Fotos publicadas: 0</div>
+      <div id="admListaFotos" class="adm-lista"></div>
+
+      <div class="toggle-linha">
+        <div class="txt">Votação aberta
+          <small id="admVotStatus">Fechada.</small>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="admVotToggle" onchange="alternarVotacao()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <label for="admAbertura">Abertura automática</label>
+      <input type="datetime-local" id="admAbertura">
+      <label for="admFechamento">Fechamento automático</label>
+      <input type="datetime-local" id="admFechamento">
+      <button class="btn btn-salvar" style="margin-top:12px;background:var(--agua-deep)" onclick="salvarHorarios()">Salvar horários</button>
+      <div class="aviso-envio">Depois do fechamento ninguém vota, nem religando o interruptor. Envio de fotos e comentários continuam livres.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Viewer -->
+<div class="viewer" id="viewer">
+  <div class="v-top">
+    <div class="v-title">
+      <h3 id="vTitulo"></h3>
+      <p id="vMeta"></p>
+    </div>
+    <div class="v-tools">
+      <button class="tool tool-votar" id="vBtnVotar" onclick="votarNaAtual()">🗳️ Votar</button>
+      <button class="tool" onclick="fecharViewer()">✕ Fechar</button>
+    </div>
+  </div>
+  <div class="v-img" id="vImgWrap">
+    <img id="vImg" src="" alt="" onclick="this.classList.toggle('zoom')">
+  </div>
+  <div class="v-emoji" id="vEmojiBar"></div>
+  <div class="v-comentarios">
+    <div class="c-head"><span>Comentários</span><span class="c-count" id="cCount">0</span></div>
+    <div class="c-lista" id="cLista"></div>
+    <div id="cFormWrap"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================
+   VIAGEM LIMNO 2026
+   Mesmo projeto Firebase do SEMABIO, nó separado: viagemlimno2026
+     viagemlimno2026/config/{votacaoAberta,abertura,fechamento}
+     viagemlimno2026/fotosMeta/{id}   -> {titulo,autor,uid,local,lat,lng,acc,criadoEm}
+     viagemlimno2026/fotosImg/{id}    -> base64
+     viagemlimno2026/votosPorFoto/{id}
+     viagemlimno2026/votoDoUsuario/{uid}
+     viagemlimno2026/comentarios/{id}/{k}
+     viagemlimno2026/reacoes/{id}/{chave}/{uid} -> true
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCSZXSCqdG_Dqu14vCdendiHA13mF-T_cw",
+  authDomain: "semabio-vilarica.firebaseapp.com",
+  databaseURL: "https://semabio-vilarica-default-rtdb.firebaseio.com",
+  projectId: "semabio-vilarica",
+  storageBucket: "semabio-vilarica.firebasestorage.app",
+  messagingSenderId: "834365654927",
+  appId: "1:834365654927:web:80bbecd4565200304eedfa"
+};
+const CODIGO_ORGANIZACAO = "limno2026";
+
+/* Reações disponíveis. Chave curta no banco, emoji na tela. */
+const REACOES = [
+  {k:'like',   e:'👍', t:'curti'},
+  {k:'dislike',e:'👎', t:'nem'},
+  {k:'risada', e:'😂', t:'zoeira'},
+  {k:'palmas', e:'👏', t:'aplausos'},
+  {k:'amei',   e:'😍', t:'amei'},
+  {k:'uau',    e:'🤯', t:'uau'},
+  {k:'choro',  e:'😭', t:'chorei'},
+  {k:'fogo',   e:'🔥', t:'brabo'},
+  {k:'lixo',   e:'🗑️', t:'joga fora'},
+  {k:'peixe',  e:'🐟', t:'peixe'},
+  {k:'agua',   e:'💧', t:'limno'},
+  {k:'mosquito',e:'🦟',t:'muriçoca'},
+  {k:'sol',    e:'🥵', t:'calorão'},
+  {k:'sono',   e:'🥱', t:'sono'},
+  {k:'palhaco',e:'🤡', t:'palhaçada'}
+];
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database().ref("viagemlimno2026");
+const refCfg = db.child("config");
+const refMeta = db.child("fotosMeta");
+const refImg = db.child("fotosImg");
+const refVotosFoto = db.child("votosPorFoto");
+const refVotoUser = db.child("votoDoUsuario");
+const refComent = db.child("comentarios");
+const refReac = db.child("reacoes");
+
+let metaMap={}, votosMap={}, comentMap={}, reacMap={}, fotos=[];
+let imgCache={};
+let cur=0, viewerAberto=false, carregouInicial=false;
+let usuario=null, meuVoto=null, isAdmin=false, arquivoSel=null;
+let votacaoAberta=false;
+let tsAbertura=null, tsFechamento=null, toggleManual=false, tickTimer=null;
+let geoSel=null;
+let mapa=null, camadaMapa=null;
+
+const provider = new firebase.auth.GoogleAuthProvider();
+function loginGoogle(){
+  auth.signInWithPopup(provider).then(()=>{ fecharLogin(); toast('Bem-vindo(a) à viagem.'); })
+  .catch(err=>toast('Não foi possível entrar: '+(err.message||err)));
+}
+function sair(){ auth.signOut(); toast('Você saiu.'); }
+auth.onAuthStateChanged(u=>{
+  usuario=u;
+  if(u){ refVotoUser.child(u.uid).on('value',s=>{ meuVoto=s.val(); atualizarBarra(); if(viewerAberto)atualizarViewer(); marcarSelos(); }); }
+  else meuVoto=null;
+  atualizarChipUser(); atualizarBarra(); montarEmojiBars();
+});
+function atualizarChipUser(){
+  const chip=document.getElementById('chipUser');
+  if(usuario){
+    chip.innerHTML=(usuario.photoURL?`<img src="${usuario.photoURL}" alt="">`:'👤 ')+`<b>${esc((usuario.displayName||'você').split(' ')[0])}</b>`;
+    chip.onclick=()=>{ if(confirm('Sair da sua conta?')) sair(); };
+  } else { chip.innerHTML='👤 <b>entrar</b>'; chip.onclick=abrirLogin; }
+}
+
+refCfg.on('value',s=>{
+  const c = s.val()||{};
+  toggleManual = c.votacaoAberta===true;
+  tsAbertura = c.abertura||null;
+  tsFechamento = c.fechamento||null;
+  recalcularJanela();
+  const t=document.getElementById('admVotToggle'); if(t) t.checked=toggleManual;
+  const ab=document.getElementById('admAbertura'); if(ab && c.abertura) ab.value=msParaInput(c.abertura);
+  const fc=document.getElementById('admFechamento'); if(fc && c.fechamento) fc.value=msParaInput(c.fechamento);
+  if(viewerAberto) atualizarViewer();
+});
+
+function recalcularJanela(){
+  const agora = Date.now();
+  let aberta;
+  if(tsFechamento && agora >= tsFechamento) aberta = false;
+  else if(toggleManual) aberta = true;
+  else if(tsAbertura && agora >= tsAbertura) aberta = true;
+  else aberta = false;
+  votacaoAberta = aberta;
+  const st=document.getElementById('admVotStatus');
+  if(st) st.textContent = aberta?'Aberta. O público já pode votar.':'Fechada. Ninguém consegue votar ainda.';
+  atualizarBarra();
+  atualizarContador();
+}
+function msParaInput(ms){ const d=new Date(ms - d0off(ms)); return d.toISOString().slice(0,16); }
+function d0off(ms){ return new Date(ms).getTimezoneOffset()*60000; }
+function inputParaMs(v){ if(!v)return null; return new Date(v).getTime(); }
+
+function iniciarTick(){ if(tickTimer) clearInterval(tickTimer); tickTimer=setInterval(recalcularJanela,1000); }
+iniciarTick();
+
+function atualizarContador(){
+  const el = document.getElementById('contadorRegressivo');
+  if(!el) return;
+  const agora = Date.now();
+  let alvo=null, rotulo='';
+  if(votacaoAberta && tsFechamento && agora < tsFechamento){ alvo=tsFechamento; rotulo='votação encerra em'; }
+  else if(!votacaoAberta && !toggleManual && tsAbertura && agora < tsAbertura){ alvo=tsAbertura; rotulo='votação abre em'; }
+  if(!alvo){ el.style.display='none'; return; }
+  el.style.display='flex';
+  const falta = Math.max(0, alvo - agora);
+  const s = Math.floor(falta/1000)%60, m = Math.floor(falta/60000)%60, hh = Math.floor(falta/3600000);
+  let txt;
+  if(hh>0) txt = hh+'h '+String(m).padStart(2,'0')+'min';
+  else if(m>0) txt = m+'min '+String(s).padStart(2,'0')+'s';
+  else txt = s+'s';
+  el.innerHTML = '⏳ '+rotulo+' <b>'+txt+'</b>';
+}
+
+refMeta.once('value').then(()=>{ carregouInicial=true; document.getElementById('estadoCarregando').style.display='none'; render(); })
+.catch(err=>{ document.getElementById('estadoCarregando').innerHTML='<div class="icone">⚠️</div><h2>Não foi possível conectar</h2><p>'+esc(err.message||err)+'</p>'; });
+refMeta.on('child_added',s=>{ metaMap[s.key]=s.val(); if(carregouInicial)render(); });
+refMeta.on('child_changed',s=>{ metaMap[s.key]=s.val(); if(carregouInicial)render(); });
+refMeta.on('child_removed',s=>{ delete metaMap[s.key]; delete imgCache[s.key]; render(); });
+refVotosFoto.on('value',s=>{ votosMap=s.val()||{}; if(carregouInicial){combinar();atualizarBarra();atualizarMiniVotos();if(viewerAberto)atualizarViewer();} });
+refComent.on('value',s=>{ comentMap=s.val()||{}; if(carregouInicial){combinar();if(viewerAberto){const f=fotos[cur];if(f)renderComentarios(f);}atualizarBarra();} });
+refReac.on('value',s=>{ reacMap=s.val()||{}; if(carregouInicial){combinar();montarEmojiBars();} });
+
+function combinar(){
+  fotos=Object.keys(metaMap).sort((a,b)=>((metaMap[a].criadoEm||0)-(metaMap[b].criadoEm||0))||a.localeCompare(b)).map(id=>{
+    const cm=comentMap[id]?Object.keys(comentMap[id]).sort().map(k=>({_k:k, ...comentMap[id][k]})):[];
+    return { id, ...metaMap[id], votos:votosMap[id]||0, comentarios:cm };
+  });
+}
+function contaReacao(fotoId,chave){ const n=reacMap[fotoId]&&reacMap[fotoId][chave]; return n?Object.keys(n).length:0; }
+function euReagi(fotoId,chave){ if(!usuario)return false; return !!(reacMap[fotoId]&&reacMap[fotoId][chave]&&reacMap[fotoId][chave][usuario.uid]); }
+
+function carregarImagem(id, cb){
+  if(imgCache[id]){ cb(imgCache[id]); return; }
+  refImg.child(id).once('value').then(s=>{ const b=s.val(); if(b){ imgCache[id]=b; cb(b); } }).catch(()=>{});
+}
+
+function render(){
+  combinar();
+  const idAtual=fotos[cur]?fotos[cur].id:null;
+  if(fotos.length===0){
+    document.getElementById('estadoVazio').style.display='block';
+    document.getElementById('acaoBar').style.display='none';
+    document.getElementById('navL').style.display='none';
+    document.getElementById('navR').style.display='none';
+    document.getElementById('stage').innerHTML='';
+    document.getElementById('dots').innerHTML='';
+    document.getElementById('contador').textContent='';
+    atualizarBarra(); return;
+  }
+  document.getElementById('estadoVazio').style.display='none';
+  document.getElementById('acaoBar').style.display='flex';
+  document.getElementById('navL').style.display='flex';
+  document.getElementById('navR').style.display='flex';
+  const novoIdx=idAtual?fotos.findIndex(f=>f.id===idAtual):-1;
+  cur=novoIdx>=0?novoIdx:Math.min(cur,fotos.length-1);
+  montarCarrossel();
+  if(viewerAberto)atualizarViewer();
+  if(document.getElementById('ovMapa').classList.contains('open')) desenharMapa();
+}
+
+const stage=document.getElementById('stage');
+function montarCarrossel(){
+  stage.innerHTML='';
+  fotos.forEach((f,i)=>{
+    const c=document.createElement('div');
+    c.className='card'; c.dataset.i=i; c.dataset.id=f.id;
+    const meu=usuario&&meuVoto===f.id;
+    c.innerHTML=`
+      <div class="fita"></div>
+      <div class="imgbox carregando" data-imgbox="${f.id}">carregando…</div>
+      ${meu?'<div class="selo-meu">✓ meu voto</div>':''}
+      <div class="votos-mini">🗳️ ${f.votos||0}</div>
+      ${(f.lat!=null)?'<div class="pin-geo">📍 no mapa</div>':''}
+      <div class="legenda">${esc(f.titulo||'Sem título')}</div>`;
+    c.addEventListener('click',()=>{ if(Math.abs(dragDX)>8)return; if(i===cur)abrirViewer(); else irPara(i); });
+    stage.appendChild(c);
+  });
+  montarDots(); posicionar(); atualizarBarra(); carregarVisiveis(); montarEmojiBars();
+}
+function carregarVisiveis(){
+  fotos.forEach((f,i)=>{
+    if(Math.abs(i-cur)<=2){
+      carregarImagem(f.id, b=>{
+        const box=document.querySelector('.imgbox[data-imgbox="'+f.id+'"]');
+        if(box && !box.dataset.pronto){ box.dataset.pronto='1'; box.classList.remove('carregando'); box.innerHTML=`<img src="${b}" alt="${esc(f.titulo||'')}" draggable="false">`; }
+      });
+    }
+  });
+}
+function marcarSelos(){
+  fotos.forEach((f)=>{
+    const card=document.querySelector('.card[data-id="'+f.id+'"]'); if(!card)return;
+    let selo=card.querySelector('.selo-meu'); const meu=usuario&&meuVoto===f.id;
+    if(meu&&!selo){ selo=document.createElement('div'); selo.className='selo-meu'; selo.textContent='✓ meu voto'; card.appendChild(selo); }
+    if(!meu&&selo) selo.remove();
+  });
+}
+function atualizarMiniVotos(){ fotos.forEach((f)=>{ const el=document.querySelector('.card[data-id="'+f.id+'"] .votos-mini'); if(el)el.innerHTML='🗳️ '+(f.votos||0); }); }
+function posicionar(fracao=0){
+  const cards=stage.children;
+  for(let k=0;k<cards.length;k++){
+    const off=k-cur-fracao, abs=Math.abs(off), c=cards[k];
+    if(abs>3.2){ c.style.opacity=0; c.style.pointerEvents='none'; continue; }
+    c.style.pointerEvents='auto';
+    const x=off*62, rot=Math.max(-45,Math.min(45,off*-28)), scale=Math.max(.7,1-abs*.14), incl=k%2===0?-1.2:1.4;
+    c.style.zIndex=100-Math.round(abs*10);
+    c.style.opacity=abs>2.6?0:1-abs*.22;
+    c.style.filter=abs<.4?'none':'saturate(.9)';
+    c.style.transform=`translate(calc(-50% + ${x}%), -50%) rotateY(${rot}deg) rotate(${abs<.4?0:incl}deg) scale(${scale})`;
+  }
+}
+function irPara(i){ cur=Math.max(0,Math.min(fotos.length-1,i)); posicionar(); atualizarDots(); atualizarBarra(); carregarVisiveis(); montarEmojiBars(); }
+let dragX=null,dragDX=0;
+stage.addEventListener('pointerdown',e=>{ dragX=e.clientX;dragDX=0;[...stage.children].forEach(c=>c.classList.add('dragging')); });
+window.addEventListener('pointermove',e=>{ if(dragX===null)return; dragDX=e.clientX-dragX; posicionar(-dragDX/(stage.clientWidth*.5)); });
+window.addEventListener('pointerup',()=>{ if(dragX===null)return; [...stage.children].forEach(c=>c.classList.remove('dragging')); const lim=stage.clientWidth*.12; if(dragDX<-lim)irPara(cur+1); else if(dragDX>lim)irPara(cur-1); else posicionar(); dragX=null; setTimeout(()=>dragDX=0,50); });
+document.getElementById('navL').onclick=()=>irPara(cur-1);
+document.getElementById('navR').onclick=()=>irPara(cur+1);
+document.addEventListener('keydown',e=>{ if(document.querySelector('.overlay.open'))return; if(e.key==='ArrowLeft'){irPara(cur-1);if(viewerAberto)atualizarViewer();} if(e.key==='ArrowRight'){irPara(cur+1);if(viewerAberto)atualizarViewer();} if(e.key==='Escape')fecharViewer(); });
+
+/* ---------- reações ---------- */
+function montarEmojiBars(){
+  const f=fotos[cur];
+  const html = !f ? '' : REACOES.map(r=>{
+    const n=contaReacao(f.id,r.k), eu=euReagi(f.id,r.k);
+    return `<button class="emoji-btn${eu?' ativo':''}" data-r="${r.k}" title="${r.t}" onclick="reagir('${f.id}','${r.k}',this)">${r.e}<span class="n">${n||''}</span></button>`;
+  }).join('');
+  const b1=document.getElementById('emojiBar'); if(b1) b1.innerHTML=html;
+  const b2=document.getElementById('vEmojiBar'); if(b2) b2.innerHTML=html;
+}
+function reagir(fotoId,chave,btn){
+  if(!usuario){ abrirLogin(); return; }
+  const ref=refReac.child(fotoId).child(chave).child(usuario.uid);
+  const jaTinha=euReagi(fotoId,chave);
+  if(jaTinha){ ref.remove().catch(err=>toast('Erro: '+(err.message||err))); }
+  else {
+    ref.set(true).then(()=>{
+      const r=REACOES.find(x=>x.k===chave);
+      if(r) soltarFloaters([r.e],10);
+    }).catch(err=>toast('Erro: '+(err.message||err)));
+  }
+  if(btn){ btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse'); }
+}
+
+/* ---------- ranking ---------- */
+document.getElementById('btnRank').onclick=()=>{
+  const top=[...fotos].sort((a,b)=>(b.votos||0)-(a.votos||0)).slice(0,10);
+  const medalhas=['🥇','🥈','🥉','4º','5º','6º','7º','8º','9º','10º'];
+  document.getElementById('rankLista').innerHTML=top.length===0
+    ?'<p class="sem-coment">Ainda não há votos.</p>'
+    :top.map((f,i)=>`
+      <div class="rank-item" onclick="irPara(${fotos.findIndex(x=>x.id===f.id)});document.getElementById('ovRank').classList.remove('open')">
+        <div class="rank-pos">${medalhas[i]}</div>
+        <div class="rimg" id="rimg-${f.id}"></div>
+        <div class="rank-info"><b>${esc(f.titulo||'Sem título')}</b><span>${esc(f.autor||'')}</span></div>
+        <div class="rank-votos">🗳️ ${f.votos||0}</div>
+      </div>`).join('');
+  top.forEach(f=>carregarImagem(f.id,b=>{const el=document.getElementById('rimg-'+f.id);if(el)el.innerHTML=`<img src="${b}" alt="">`;}));
+  document.getElementById('ovRank').classList.add('open');
+};
+
+function montarDots(){ const d=document.getElementById('dots'); d.innerHTML=''; fotos.forEach((_,i)=>{ const b=document.createElement('button'); b.className='dot'+(i===cur?' on':''); b.onclick=()=>irPara(i); d.appendChild(b); }); }
+function atualizarDots(){ [...document.getElementById('dots').children].forEach((b,i)=>b.classList.toggle('on',i===cur)); }
+function dataHoraBR(ms){ if(!ms)return''; try{return new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return'';} }
+
+function atualizarBarra(){
+  const f=fotos[cur];
+  const fx=document.getElementById('faixaVotoTxt');
+  if(!usuario){ fx.className='inner'; fx.innerHTML='👋 Entre com sua conta Google para enviar foto, reagir e comentar.'; }
+  else if(!votacaoAberta){ fx.className='inner fechada'; fx.innerHTML='📷 Envie fotos e comente à vontade. A votação está fechada no momento.'; }
+  else if(meuVoto){ const mf=metaMap[meuVoto]; fx.className='inner'; fx.innerHTML='✅ Seu voto está em: <b>'+esc(mf?mf.titulo:'uma foto')+'</b>. Pode trocar votando em outra.'; }
+  else { fx.className='inner'; fx.innerHTML='👉 Escolha uma foto e toque em <b>Votar</b>.'; }
+  if(!f)return;
+  document.getElementById('contador').textContent=`${cur+1} / ${fotos.length}`;
+  document.getElementById('infoTitulo').textContent=f.titulo||'Sem título';
+  const partes=[]; if(f.autor)partes.push('por '+esc(f.autor));
+  if(f.criadoEm)partes.push(dataHoraBR(f.criadoEm));
+  partes.push('🗳️ '+(f.votos||0)+(f.votos===1?' voto':' votos'));
+  document.getElementById('infoMeta').innerHTML=partes.join(' · ');
+  const lc=document.getElementById('infoLocal');
+  if(f.lat!=null){
+    lc.style.display='block';
+    lc.innerHTML='📍 '+esc(f.local||(Number(f.lat).toFixed(4)+', '+Number(f.lng).toFixed(4)))+' · ver no mapa';
+    lc.onclick=()=>{ abrirMapa(f.id); };
+  } else lc.style.display='none';
+  document.getElementById('nComent').textContent=(f.comentarios||[]).length;
+  const bv=document.getElementById('btnVotar');
+  bv.disabled=!votacaoAberta;
+  if(!votacaoAberta){ bv.innerHTML='🔒 Votação fechada'; bv.classList.remove('votado'); }
+  else if(usuario&&meuVoto===f.id){ bv.classList.add('votado'); bv.innerHTML='✓ Você votou aqui'; }
+  else { bv.classList.remove('votado'); bv.innerHTML='🗳️ Votar nesta foto'; }
+}
+
+function votar(fotoId){
+  if(!votacaoAberta){ toast('A votação está fechada.'); return; }
+  if(!usuario){ abrirLogin(); return; }
+  if(meuVoto===fotoId){ toast('Este já é o seu voto. Vote em outra para trocar.'); return; }
+  const anterior=meuVoto;
+  db.update({['votoDoUsuario/'+usuario.uid]:fotoId}).then(()=>{
+    refVotosFoto.child(fotoId).transaction(v=>(v||0)+1);
+    if(anterior) refVotosFoto.child(anterior).transaction(v=>Math.max(0,(v||0)-1));
+    soltarFloaters(['🗳️','🎉','✨','🌊','📸','🐟'],24);
+    toast(anterior?'Voto trocado!':'Voto registrado!');
+  }).catch(err=>toast('Erro ao votar: '+(err.message||err)));
+}
+document.getElementById('btnVotar').onclick=function(){ const f=fotos[cur]; if(!f)return; this.classList.remove('pop');void this.offsetWidth;this.classList.add('pop'); votar(f.id); };
+function votarNaAtual(){ const f=fotos[cur]; if(f)votar(f.id); }
+
+/* ---------- viewer ---------- */
+function abrirViewer(){ const f=fotos[cur]; if(!f)return; viewerAberto=true; document.getElementById('viewer').classList.add('open'); atualizarViewer(); }
+function fecharViewer(){ viewerAberto=false; document.getElementById('viewer').classList.remove('open'); }
+function atualizarViewer(){
+  const f=fotos[cur]; if(!f)return;
+  document.getElementById('vTitulo').textContent=f.titulo||'Sem título';
+  const partes=[]; if(f.autor)partes.push('por '+esc(f.autor));
+  if(f.local)partes.push('📍 '+esc(f.local));
+  else if(f.lat!=null)partes.push('📍 '+Number(f.lat).toFixed(4)+', '+Number(f.lng).toFixed(4));
+  if(f.criadoEm)partes.push(dataHoraBR(f.criadoEm));
+  partes.push('🗳️ '+(f.votos||0));
+  document.getElementById('vMeta').innerHTML=partes.join(' · ');
+  const vimg=document.getElementById('vImg'); vimg.classList.remove('zoom'); vimg.src='';
+  carregarImagem(f.id,b=>{ vimg.src=b; });
+  const vb=document.getElementById('vBtnVotar');
+  vb.disabled=!votacaoAberta;
+  if(!votacaoAberta){ vb.innerHTML='🔒 Fechada'; vb.classList.remove('votado'); }
+  else if(usuario&&meuVoto===f.id){ vb.classList.add('votado'); vb.innerHTML='✓ Votado'; }
+  else { vb.classList.remove('votado'); vb.innerHTML='🗳️ Votar'; }
+  montarEmojiBars();
+  renderComentarios(f);
+}
+document.getElementById('chipComent').onclick=abrirViewer;
+
+function renderComentarios(f){
+  const lista=document.getElementById('cLista');
+  document.getElementById('cCount').textContent=(f.comentarios||[]).length;
+  lista.innerHTML=(f.comentarios||[]).length===0
+    ?'<p class="sem-coment">Ainda sem comentários. Manda a zoeira.</p>'
+    :f.comentarios.map(c=>{
+      const meu = usuario && (c.uid===usuario.uid);
+      const podeApagar = meu || isAdmin;
+      return `<div class="c-item">
+        <div class="c-autor">${c.foto?`<img src="${c.foto}" alt="">`:'👤'} ${esc(c.nome||'Anônimo')}</div>
+        <div class="c-texto">${esc(c.texto)}</div>
+        <div class="c-data">${dataHoraBR(c.criadoEm)}</div>
+        ${podeApagar?`<button class="c-apagar" onclick="apagarComentario('${f.id}','${c._k}')">apagar</button>`:''}
+      </div>`;
+    }).join('');
+  const wrap=document.getElementById('cFormWrap');
+  if(usuario){ wrap.innerHTML=`<div class="c-form"><textarea id="cInput" rows="1" maxlength="300" placeholder="Comente, zoe, elogie..."></textarea><button class="btn btn-env" onclick="enviarComentario()">Enviar</button></div>`; }
+  else { wrap.innerHTML=`<div class="c-login-aviso">Para comentar, <a onclick="abrirLogin()">entre com sua conta Google</a>.</div>`; }
+}
+function enviarComentario(){
+  const f=fotos[cur]; if(!f||!usuario)return;
+  const inp=document.getElementById('cInput'); const txt=inp.value.trim(); if(!txt)return;
+  refComent.child(f.id).push({ uid:usuario.uid, nome:(usuario.displayName||'Anônimo'), foto:usuario.photoURL||'', texto:txt, criadoEm:firebase.database.ServerValue.TIMESTAMP })
+  .then(()=>{ inp.value=''; }).catch(err=>toast('Erro ao comentar: '+(err.message||err)));
+}
+function apagarComentario(fotoId,chave){
+  if(!usuario)return;
+  const c = comentMap[fotoId] && comentMap[fotoId][chave];
+  if(!c) return;
+  if(!(isAdmin || c.uid===usuario.uid)){ toast('Você só pode apagar o próprio comentário.'); return; }
+  if(!confirm('Apagar este comentário?')) return;
+  refComent.child(fotoId).child(chave).remove().catch(err=>toast('Erro: '+(err.message||err)));
+}
+
+function abrirLogin(){ document.getElementById('ovLogin').classList.add('open'); }
+function fecharLogin(){ document.getElementById('ovLogin').classList.remove('open'); }
+
+/* ---------- envio pelo participante ---------- */
+document.getElementById('btnEnviar').onclick=()=>{
+  if(!usuario){ abrirLogin(); return; }
+  document.getElementById('ovEnviar').classList.add('open');
+};
+const fileInput=document.getElementById('fileInput');
+const dropArea=document.getElementById('dropArea');
+dropArea.onclick=()=>fileInput.click();
+dropArea.ondragover=e=>{e.preventDefault();dropArea.classList.add('over');};
+dropArea.ondragleave=()=>dropArea.classList.remove('over');
+dropArea.ondrop=e=>{e.preventDefault();dropArea.classList.remove('over');selecionarArquivo(e.dataTransfer.files[0]);};
+fileInput.onchange=()=>selecionarArquivo(fileInput.files[0]);
+function selecionarArquivo(file){
+  if(!file||!file.type.startsWith('image/')){toast('Selecione uma imagem.');return;}
+  arquivoSel=file;
+  const pv=document.getElementById('previews'); pv.innerHTML='';
+  const img=document.createElement('img'); img.src=URL.createObjectURL(file); pv.appendChild(img);
+  dropArea.textContent=file.name;
+}
+function pegarLocal(){
+  const box=document.getElementById('geoBox'), txt=document.getElementById('geoTxt'), btn=document.getElementById('geoBtn');
+  if(!navigator.geolocation){ toast('Este navegador não tem GPS disponível.'); return; }
+  btn.textContent='...'; btn.disabled=true;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    geoSel={ lat:pos.coords.latitude, lng:pos.coords.longitude, acc:Math.round(pos.coords.accuracy||0) };
+    box.classList.add('ok');
+    txt.innerHTML='Posição marcada <small>'+geoSel.lat.toFixed(5)+', '+geoSel.lng.toFixed(5)+' · precisão ~'+geoSel.acc+' m</small>';
+    btn.textContent='↻ Refazer'; btn.disabled=false;
+  },err=>{
+    btn.textContent='📍 Marcar'; btn.disabled=false;
+    toast('Não deu para pegar a posição: '+(err.message||'permissão negada'));
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+function comprimir(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1280; let w=img.width,h=img.height;
+      if(Math.max(w,h)>MAX){ const f=MAX/Math.max(w,h); w=Math.round(w*f); h=Math.round(h*f); }
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      let q=0.8, data=cv.toDataURL('image/jpeg',q);
+      while(data.length>240000 && q>0.35){ q-=0.08; data=cv.toDataURL('image/jpeg',q); }
+      URL.revokeObjectURL(img.src); resolve(data);
+    };
+    img.onerror=reject; img.src=URL.createObjectURL(file);
+  });
+}
+function publicarFoto(){
+  if(!usuario){ abrirLogin(); return; }
+  const titulo=document.getElementById('pTitulo').value.trim();
+  const local=document.getElementById('pLocal').value.trim();
+  if(!titulo){ toast('Dê um título ou legenda à foto.'); return; }
+  if(!arquivoSel){ toast('Escolha uma imagem.'); return; }
+  if(!geoSel && !confirm('Você não marcou a posição. A foto entra na galeria mas fica fora do mapa da viagem. Publicar assim mesmo?')) return;
+  const btn=document.getElementById('btnPublicar'); btn.disabled=true; btn.textContent='Publicando...';
+  comprimir(arquivoSel).then(base64=>{
+    const id=refMeta.push().key;
+    const meta={ titulo, autor:(usuario.displayName||'Anônimo'), uid:usuario.uid, criadoEm:firebase.database.ServerValue.TIMESTAMP };
+    if(local) meta.local=local;
+    if(geoSel){ meta.lat=geoSel.lat; meta.lng=geoSel.lng; meta.acc=geoSel.acc; }
+    const updates={};
+    updates['fotosMeta/'+id]=meta;
+    updates['fotosImg/'+id]=base64;
+    updates['votosPorFoto/'+id]=0;
+    db.update(updates).then(()=>{
+      toast('Foto publicada!');
+      soltarFloaters(['📸','🌊','🐟','✨'],14);
+      document.getElementById('pTitulo').value='';
+      document.getElementById('pLocal').value='';
+      document.getElementById('previews').innerHTML='';
+      dropArea.textContent='Toque para escolher ou tirar a foto';
+      arquivoSel=null; geoSel=null;
+      const box=document.getElementById('geoBox'); box.classList.remove('ok');
+      document.getElementById('geoTxt').innerHTML='Marcar minha posição agora<small>Sem isso a foto entra na galeria, mas fica fora do mapa.</small>';
+      document.getElementById('geoBtn').textContent='📍 Marcar';
+      btn.disabled=false; btn.textContent='Publicar foto';
+      document.getElementById('ovEnviar').classList.remove('open');
+      setTimeout(atualizarContagemAdmin,400);
+    }).catch(err=>{ toast('Erro ao publicar: '+(err.message||err)); btn.disabled=false; btn.textContent='Publicar foto'; });
+  }).catch(err=>{ toast('Erro na imagem: '+(err.message||err)); btn.disabled=false; btn.textContent='Publicar foto'; });
+}
+
+/* ---------- mapa ---------- */
+document.getElementById('btnMapa').onclick=()=>abrirMapa(null);
+function abrirMapa(focarId){
+  document.getElementById('ovMapa').classList.add('open');
+  atualizarFiltroPessoas();
+  setTimeout(()=>{
+    if(!mapa){
+      mapa=L.map('mapa',{scrollWheelZoom:true}).setView([-16.07,-57.68],9);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        maxZoom:19, attribution:'&copy; OpenStreetMap'
+      }).addTo(mapa);
+    }
+    mapa.invalidateSize();
+    desenharMapa(focarId);
+  },260);
+}
+function fecharMapa(){ document.getElementById('ovMapa').classList.remove('open'); }
+function atualizarFiltroPessoas(){
+  const sel=document.getElementById('filtroPessoa');
+  const atual=sel.value;
+  const nomes=[...new Set(fotos.filter(f=>f.lat!=null).map(f=>f.autor||'Anônimo'))].sort();
+  sel.innerHTML='<option value="">Todo mundo</option>'+nomes.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value=atual;
+}
+function fotosGeo(){
+  const filtro=document.getElementById('filtroPessoa').value;
+  return fotos.filter(f=>f.lat!=null && (!filtro || (f.autor||'Anônimo')===filtro))
+              .sort((a,b)=>(a.criadoEm||0)-(b.criadoEm||0));
+}
+function desenharMapa(focarId){
+  if(!mapa) return;
+  if(camadaMapa) mapa.removeLayer(camadaMapa);
+  camadaMapa=L.layerGroup().addTo(mapa);
+  const lista=fotosGeo();
+  const leg=document.getElementById('mapaLegenda');
+  const semGeo=fotos.length-fotos.filter(f=>f.lat!=null).length;
+  if(lista.length===0){
+    leg.innerHTML='Nenhuma foto com posição marcada ainda.'+(semGeo?' '+semGeo+' foto(s) foram enviadas sem GPS.':'');
+    return;
+  }
+  const pontos=lista.map(f=>[f.lat,f.lng]);
+  L.polyline(pontos,{color:'#2b8ca8',weight:3,opacity:.75,dashArray:'6,7'}).addTo(camadaMapa);
+  lista.forEach((f,i)=>{
+    const marca=L.marker([f.lat,f.lng],{
+      icon:L.divIcon({
+        className:'',
+        html:`<div style="background:#0f4c5c;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 12px 'Source Sans 3',sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35);border:2px solid #fff">${i+1}</div>`,
+        iconSize:[26,26], iconAnchor:[13,13]
+      })
+    }).addTo(camadaMapa);
+    const idx=fotos.findIndex(x=>x.id===f.id);
+    marca.bindPopup(`<div class="pop-mini"><div id="popimg-${f.id}"></div><b>${esc(f.titulo||'Sem título')}</b><span>${esc(f.autor||'')}</span><span>${dataHoraBR(f.criadoEm)}</span>${f.local?`<span>📍 ${esc(f.local)}</span>`:''}<button onclick="irPara(${idx});fecharMapa();">Ver foto</button></div>`);
+    marca.on('popupopen',()=>{ carregarImagem(f.id,b=>{ const el=document.getElementById('popimg-'+f.id); if(el)el.innerHTML=`<img src="${b}" alt="">`; }); });
+    if(focarId && f.id===focarId){ mapa.setView([f.lat,f.lng],14); setTimeout(()=>marca.openPopup(),350); }
+  });
+  const t0=lista[0].criadoEm, t1=lista[lista.length-1].criadoEm;
+  leg.innerHTML=`${lista.length} ponto(s) no rastro, numerados na ordem em que foram enviados. `
+    +(t0&&t1?`De ${dataHoraBR(t0)} até ${dataHoraBR(t1)}. `:'')
+    +(semGeo?`${semGeo} foto(s) sem GPS ficaram fora do mapa. `:'')
+    +`A posição é a de quem enviou no momento do envio, não a do local retratado na foto.`;
+  if(!focarId) ajustarMapa();
+}
+function ajustarMapa(){
+  if(!mapa)return;
+  const lista=fotosGeo();
+  if(lista.length===0)return;
+  if(lista.length===1){ mapa.setView([lista[0].lat,lista[0].lng],14); return; }
+  mapa.fitBounds(L.latLngBounds(lista.map(f=>[f.lat,f.lng])),{padding:[40,40]});
+}
+
+/* ---------- admin ---------- */
+let toqueTitulo=0,toqueTimer=null;
+document.querySelector('.brand-txt h1').addEventListener('click',()=>{ toqueTitulo++; clearTimeout(toqueTimer); toqueTimer=setTimeout(()=>toqueTitulo=0,800); if(toqueTitulo>=3){ toqueTitulo=0; document.getElementById('ovAdmin').classList.add('open'); } });
+document.addEventListener('keydown',e=>{ if(e.key==='A'&&e.shiftKey&&!document.querySelector('.overlay.open')) document.getElementById('ovAdmin').classList.add('open'); });
+function fecharAdmin(){ document.getElementById('ovAdmin').classList.remove('open'); }
+function entrarAdmin(){
+  if(document.getElementById('admCodigo').value.trim()===CODIGO_ORGANIZACAO){
+    isAdmin=true;
+    document.getElementById('adminLogin').style.display='none';
+    document.getElementById('adminPainel').style.display='block';
+    atualizarContagemAdmin();
+    if(viewerAberto){ const f=fotos[cur]; if(f) renderComentarios(f); }
+  } else toast('Código incorreto.');
+}
+function atualizarContagemAdmin(){
+  const cont = document.getElementById('admContagem');
+  if(!cont) return;
+  const comGeo=fotos.filter(f=>f.lat!=null).length;
+  cont.textContent = 'Fotos publicadas: '+fotos.length+' · com posição no mapa: '+comGeo;
+  const listaCont=document.getElementById('admListaFotos');
+  if(!listaCont) return;
+  if(fotos.length===0){ listaCont.className='adm-lista'; listaCont.innerHTML=''; return; }
+  listaCont.className='adm-lista on';
+  listaCont.innerHTML=fotos.map(f=>`
+    <div class="adm-foto" data-id="${f.id}">
+      <div class="mini" id="admmini-${f.id}"></div>
+      <div class="info"><b>${esc(f.titulo||'Sem título')}</b><span>${esc(f.autor||'')} · 🗳️ ${f.votos||0} ${f.lat!=null?'· 📍':''}</span></div>
+      <button class="adm-del" onclick="excluirFoto('${f.id}','${esc(f.titulo||'').replace(/'/g,"\\'")}')">Excluir</button>
+    </div>`).join('');
+  fotos.forEach(f=>carregarImagem(f.id,b=>{const el=document.getElementById('admmini-'+f.id);if(el){el.style.backgroundImage=`url(${b})`;el.style.backgroundSize='cover';el.style.backgroundPosition='center';}}));
+}
+
+function excluirFoto(id, titulo){
+  const meta = metaMap[id];
+  const dono = usuario && meta && meta.uid===usuario.uid;
+  if(!isAdmin && !dono){ toast('Você só pode excluir a própria foto.'); return; }
+  const temVotos = (votosMap[id]||0)>0;
+  let aviso = 'Excluir a foto "'+titulo+'"? Esta ação não pode ser desfeita.';
+  if(temVotos) aviso += '\n\nEsta foto tem '+(votosMap[id]||0)+' voto(s). Quem votou nela poderá votar de novo em outra.';
+  if(!confirm(aviso)) return;
+
+  refVotoUser.once('value').then(snap=>{
+    const updates={};
+    updates['fotosMeta/'+id]=null;
+    updates['fotosImg/'+id]=null;
+    updates['votosPorFoto/'+id]=null;
+    updates['comentarios/'+id]=null;
+    updates['reacoes/'+id]=null;
+    const vu=snap.val()||{};
+    Object.keys(vu).forEach(uid=>{ if(vu[uid]===id) updates['votoDoUsuario/'+uid]=null; });
+    db.update(updates).then(()=>{
+      delete imgCache[id];
+      toast('Foto excluída.');
+      setTimeout(atualizarContagemAdmin,400);
+    }).catch(err=>toast('Erro ao excluir: '+(err.message||err)));
+  }).catch(err=>toast('Erro ao ler votos: '+(err.message||err)));
+}
+function alternarVotacao(){
+  if(!isAdmin)return;
+  const novo=document.getElementById('admVotToggle').checked;
+  if(novo && tsFechamento && Date.now()>=tsFechamento){
+    document.getElementById('admVotToggle').checked=false;
+    toast('O horário de fechamento já passou. Não é possível reabrir.');
+    return;
+  }
+  refCfg.child('votacaoAberta').set(novo).then(()=>toast(novo?'Votação ABERTA.':'Votação fechada.'))
+  .catch(err=>toast('Erro: '+(err.message||err)));
+}
+function salvarHorarios(){
+  if(!isAdmin)return;
+  const ab=inputParaMs(document.getElementById('admAbertura').value);
+  const fc=inputParaMs(document.getElementById('admFechamento').value);
+  if(ab && fc && fc<=ab){ toast('O fechamento tem que ser depois da abertura.'); return; }
+  refCfg.update({abertura: ab||null, fechamento: fc||null})
+  .then(()=>toast('Horários salvos.'))
+  .catch(err=>toast('Erro: '+(err.message||err)));
+}
+
+/* ---------- utilidades ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function toast(msg){ let t=document.querySelector('.toast'); if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t);} t.textContent=msg; t.classList.add('show'); clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'),2600); }
+function soltarFloaters(emojis,qtd){
+  const arr = Array.isArray(emojis)?emojis:[emojis];
+  let feitos=0;
+  const lote=()=>{
+    for(let j=0;j<4 && feitos<qtd;j++,feitos++){
+      const f=document.createElement('div'); f.className='floater';
+      f.textContent=arr[Math.floor(Math.random()*arr.length)];
+      f.style.left=(Math.random()*94+3)+'vw';
+      f.style.fontSize=(1.4+Math.random()*1.4)+'rem';
+      f.style.setProperty('--dur',(2+Math.random()*1.8)+'s');
+      f.style.setProperty('--drift',(Math.random()*160-80)+'px');
+      f.style.setProperty('--giro',(Math.random()*240-120)+'deg');
+      document.body.appendChild(f);
+      setTimeout(()=>f.remove(),4000);
+    }
+    if(feitos<qtd) requestAnimationFrame(lote);
+  };
+  lote();
+}
+</script>
+</body>
+</html>
