@@ -679,7 +679,8 @@ function atualizarBarra(){
   const lc=document.getElementById('infoLocal');
   if(f.lat!=null){
     lc.style.display='block';
-    lc.innerHTML='📍 '+esc(f.local||(Number(f.lat).toFixed(4)+', '+Number(f.lng).toFixed(4)))+' · ver no mapa';
+    const marcaFonte = f.fonte==='exif' ? '🛰️' : '📱';
+    lc.innerHTML=marcaFonte+' '+esc(f.local||(Number(f.lat).toFixed(4)+', '+Number(f.lng).toFixed(4)))+' · ver no mapa';
     lc.onclick=()=>{ abrirMapa(f.id); };
   } else lc.style.display='none';
   document.getElementById('nComent').textContent=(f.comentarios||[]).length;
@@ -778,24 +779,174 @@ dropArea.ondragover=e=>{e.preventDefault();dropArea.classList.add('over');};
 dropArea.ondragleave=()=>dropArea.classList.remove('over');
 dropArea.ondrop=e=>{e.preventDefault();dropArea.classList.remove('over');selecionarArquivo(e.dataTransfer.files[0]);};
 fileInput.onchange=()=>selecionarArquivo(fileInput.files[0]);
+/* ---- leitura de EXIF direto do arquivo, sem biblioteca ----
+   Percorre os segmentos JPEG até achar o APP1 com "Exif\0\0", lê o TIFF header
+   para descobrir a ordem dos bytes, acha o ponteiro do GPS IFD (tag 0x8825)
+   e extrai latitude, longitude, referências N/S e E/W e a data original.     */
+function lerExif(file){
+  return new Promise(resolve=>{
+    const fr=new FileReader();
+    fr.onerror=()=>resolve(null);
+    fr.onload=()=>{
+      try{ resolve(extrairExif(new DataView(fr.result))); }
+      catch(e){ resolve(null); }
+    };
+    // 512 KB do início costuma conter todo o bloco EXIF
+    fr.readAsArrayBuffer(file.slice(0, 512*1024));
+  });
+}
+function extrairExif(view){
+  if(view.byteLength<12 || view.getUint16(0,false)!==0xFFD8) return null; // não é JPEG
+  let off=2;
+  while(off < view.byteLength-4){
+    if(view.getUint8(off)!==0xFF){ off++; continue; }
+    const marcador=view.getUint8(off+1);
+    if(marcador===0xD8 || marcador===0x01 || (marcador>=0xD0 && marcador<=0xD7)){ off+=2; continue; }
+    if(marcador===0xDA) return null; // começou a imagem, sem EXIF
+    const tam=view.getUint16(off+2,false);
+    if(marcador===0xE1){
+      const inicio=off+4;
+      if(view.getUint32(inicio,false)===0x45786966) return lerTiff(view, inicio+6);
+    }
+    off += 2 + tam;
+  }
+  return null;
+}
+function lerTiff(view, tiff){
+  if(tiff+8 > view.byteLength) return null;
+  const marca=view.getUint16(tiff,false);
+  let little;
+  if(marca===0x4949) little=true;        // II, little endian
+  else if(marca===0x4D4D) little=false;  // MM, big endian
+  else return null;
+  if(view.getUint16(tiff+2,little)!==0x002A) return null;
+
+  const ifd0 = tiff + view.getUint32(tiff+4,little);
+  if(ifd0+2 > view.byteLength) return null;
+
+  let gpsOff=null, dataOrig=null, exifOff=null;
+  const n0=view.getUint16(ifd0,little);
+  for(let i=0;i<n0;i++){
+    const e=ifd0+2+i*12;
+    if(e+12>view.byteLength) break;
+    const tag=view.getUint16(e,little);
+    if(tag===0x8825) gpsOff = tiff + view.getUint32(e+8,little);
+    if(tag===0x8769) exifOff = tiff + view.getUint32(e+8,little);
+  }
+  // data original fica no sub-IFD Exif, tag 0x9003
+  if(exifOff && exifOff+2 <= view.byteLength){
+    const ne=view.getUint16(exifOff,little);
+    for(let i=0;i<ne;i++){
+      const e=exifOff+2+i*12;
+      if(e+12>view.byteLength) break;
+      if(view.getUint16(e,little)===0x9003){
+        const cont=view.getUint32(e+4,little);
+        const pos=tiff+view.getUint32(e+8,little);
+        let s='';
+        for(let k=0;k<cont && pos+k<view.byteLength;k++){
+          const c=view.getUint8(pos+k); if(c===0)break; s+=String.fromCharCode(c);
+        }
+        dataOrig=s||null;
+      }
+    }
+  }
+  if(!gpsOff || gpsOff+2 > view.byteLength) return dataOrig?{dataExif:dataOrig}:null;
+
+  const g={};
+  const ng=view.getUint16(gpsOff,little);
+  for(let i=0;i<ng;i++){
+    const e=gpsOff+2+i*12;
+    if(e+12>view.byteLength) break;
+    const tag=view.getUint16(e,little), tipo=view.getUint16(e+2,little), cont=view.getUint32(e+4,little);
+    if(tipo===2){ // ASCII
+      const pos = cont>4 ? tiff+view.getUint32(e+8,little) : e+8;
+      let s=''; for(let k=0;k<cont && pos+k<view.byteLength;k++){ const c=view.getUint8(pos+k); if(c===0)break; s+=String.fromCharCode(c); }
+      g[tag]=s;
+    } else if(tipo===5 && cont===3){ // 3 racionais: grau, minuto, segundo
+      const pos=tiff+view.getUint32(e+8,little);
+      if(pos+24>view.byteLength) continue;
+      const r=[];
+      for(let k=0;k<3;k++){
+        const num=view.getUint32(pos+k*8,little), den=view.getUint32(pos+k*8+4,little);
+        r.push(den?num/den:0);
+      }
+      g[tag]=r;
+    }
+  }
+  const lat=g[0x0002], latRef=g[0x0001], lng=g[0x0004], lngRef=g[0x0003];
+  if(!Array.isArray(lat)||!Array.isArray(lng)) return dataOrig?{dataExif:dataOrig}:null;
+  let la=lat[0]+lat[1]/60+lat[2]/3600;
+  let lo=lng[0]+lng[1]/60+lng[2]/3600;
+  if((latRef||'N').toUpperCase().indexOf('S')===0) la=-la;
+  if((lngRef||'E').toUpperCase().indexOf('W')===0) lo=-lo;
+  if(!isFinite(la)||!isFinite(lo)) return dataOrig?{dataExif:dataOrig}:null;
+  if(la===0 && lo===0) return dataOrig?{dataExif:dataOrig}:null;
+  if(Math.abs(la)>90 || Math.abs(lo)>180) return dataOrig?{dataExif:dataOrig}:null;
+  return { lat:la, lng:lo, dataExif:dataOrig };
+}
+/* "2026:07:18 08:02:11" -> ms */
+function exifParaMs(s){
+  if(!s) return null;
+  const m=String(s).match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if(!m) return null;
+  const d=new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]);
+  const t=d.getTime();
+  return isFinite(t)?t:null;
+}
+
+function pintarGeoBox(){
+  const box=document.getElementById('geoBox'), txt=document.getElementById('geoTxt'), btn=document.getElementById('geoBtn');
+  if(!geoSel){
+    box.classList.remove('ok');
+    txt.innerHTML='Marcar minha posição agora<small>Sem isso a foto entra na galeria, mas fica fora do mapa.</small>';
+    btn.textContent='📍 Marcar'; btn.disabled=false;
+    return;
+  }
+  box.classList.add('ok');
+  const coord=geoSel.lat.toFixed(5)+', '+geoSel.lng.toFixed(5);
+  if(geoSel.fonte==='exif'){
+    txt.innerHTML='Local lido da própria foto <small>'+coord+
+      (geoSel.dataExif?' · tirada em '+esc(geoSel.dataExif.replace(/^(\d{4}):(\d{2}):(\d{2})/,'$3/$2/$1')):'')+
+      '<br>Este é o lugar onde a foto foi tirada.</small>';
+    btn.textContent='📍 Usar onde estou';
+  } else {
+    txt.innerHTML='Posição do aparelho agora <small>'+coord+' · precisão ~'+geoSel.acc+' m'+
+      '<br>É onde você está neste momento, não necessariamente onde a foto foi tirada.</small>';
+    btn.textContent='↻ Refazer';
+  }
+  btn.disabled=false;
+}
+
 function selecionarArquivo(file){
   if(!file||!file.type.startsWith('image/')){toast('Selecione uma imagem.');return;}
   arquivoSel=file;
   const pv=document.getElementById('previews'); pv.innerHTML='';
   const img=document.createElement('img'); img.src=URL.createObjectURL(file); pv.appendChild(img);
   dropArea.textContent=file.name;
+  // tenta o EXIF antes de qualquer coisa: é a coordenada mais confiável
+  lerExif(file).then(ex=>{
+    if(ex && ex.lat!=null){
+      geoSel={ lat:ex.lat, lng:ex.lng, acc:null, fonte:'exif', dataExif:ex.dataExif||null };
+      pintarGeoBox();
+      toast('Coordenadas encontradas na própria foto.');
+    } else {
+      if(geoSel && geoSel.fonte==='exif') geoSel=null;
+      pintarGeoBox();
+      const box=document.getElementById('geoBox');
+      const txt=document.getElementById('geoTxt');
+      if(!geoSel) txt.innerHTML='Esta foto não traz coordenadas<small>Sem GPS na imagem. Toque em Marcar para usar a posição do aparelho, ou publique sem mapa.</small>';
+    }
+  });
 }
 function pegarLocal(){
-  const box=document.getElementById('geoBox'), txt=document.getElementById('geoTxt'), btn=document.getElementById('geoBtn');
+  const btn=document.getElementById('geoBtn');
   if(!navigator.geolocation){ toast('Este navegador não tem GPS disponível.'); return; }
   btn.textContent='...'; btn.disabled=true;
   navigator.geolocation.getCurrentPosition(pos=>{
-    geoSel={ lat:pos.coords.latitude, lng:pos.coords.longitude, acc:Math.round(pos.coords.accuracy||0) };
-    box.classList.add('ok');
-    txt.innerHTML='Posição marcada <small>'+geoSel.lat.toFixed(5)+', '+geoSel.lng.toFixed(5)+' · precisão ~'+geoSel.acc+' m</small>';
-    btn.textContent='↻ Refazer'; btn.disabled=false;
+    geoSel={ lat:pos.coords.latitude, lng:pos.coords.longitude, acc:Math.round(pos.coords.accuracy||0), fonte:'aparelho', dataExif:null };
+    pintarGeoBox();
   },err=>{
-    btn.textContent='📍 Marcar'; btn.disabled=false;
+    pintarGeoBox();
     toast('Não deu para pegar a posição: '+(err.message||'permissão negada'));
   },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
 }
@@ -826,7 +977,13 @@ function publicarFoto(){
     const id=refMeta.push().key;
     const meta={ titulo, autor:(usuario.displayName||'Anônimo'), uid:usuario.uid, criadoEm:firebase.database.ServerValue.TIMESTAMP };
     if(local) meta.local=local;
-    if(geoSel){ meta.lat=geoSel.lat; meta.lng=geoSel.lng; meta.acc=geoSel.acc; }
+    if(geoSel){
+      meta.lat=geoSel.lat; meta.lng=geoSel.lng;
+      meta.fonte=geoSel.fonte||'aparelho';
+      if(geoSel.acc!=null) meta.acc=geoSel.acc;
+      const tFoto=exifParaMs(geoSel.dataExif);
+      if(tFoto) meta.tiradaEm=tFoto;
+    }
     const updates={};
     updates['fotosMeta/'+id]=meta;
     updates['fotosImg/'+id]=base64;
@@ -838,10 +995,7 @@ function publicarFoto(){
       document.getElementById('pLocal').value='';
       document.getElementById('previews').innerHTML='';
       dropArea.textContent='Toque para escolher ou tirar a foto';
-      arquivoSel=null; geoSel=null;
-      const box=document.getElementById('geoBox'); box.classList.remove('ok');
-      document.getElementById('geoTxt').innerHTML='Marcar minha posição agora<small>Sem isso a foto entra na galeria, mas fica fora do mapa.</small>';
-      document.getElementById('geoBtn').textContent='📍 Marcar';
+      arquivoSel=null; geoSel=null; pintarGeoBox();
       btn.disabled=false; btn.textContent='Publicar foto';
       document.getElementById('ovEnviar').classList.remove('open');
       setTimeout(atualizarContagemAdmin,400);
@@ -876,7 +1030,7 @@ function atualizarFiltroPessoas(){
 function fotosGeo(){
   const filtro=document.getElementById('filtroPessoa').value;
   return fotos.filter(f=>f.lat!=null && (!filtro || (f.autor||'Anônimo')===filtro))
-              .sort((a,b)=>(a.criadoEm||0)-(b.criadoEm||0));
+              .sort((a,b)=>(a.tiradaEm||a.criadoEm||0)-(b.tiradaEm||b.criadoEm||0));
 }
 function desenharMapa(focarId){
   if(!mapa) return;
@@ -892,23 +1046,31 @@ function desenharMapa(focarId){
   const pontos=lista.map(f=>[f.lat,f.lng]);
   L.polyline(pontos,{color:'#2b8ca8',weight:3,opacity:.75,dashArray:'6,7'}).addTo(camadaMapa);
   lista.forEach((f,i)=>{
+    const daFoto = f.fonte==='exif';
+    const cor = daFoto ? '#0f4c5c' : '#d98e3c';
     const marca=L.marker([f.lat,f.lng],{
       icon:L.divIcon({
         className:'',
-        html:`<div style="background:#0f4c5c;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 12px 'Source Sans 3',sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35);border:2px solid #fff">${i+1}</div>`,
+        html:`<div style="background:${cor};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 12px 'Source Sans 3',sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35);border:2px solid #fff">${i+1}</div>`,
         iconSize:[26,26], iconAnchor:[13,13]
       })
     }).addTo(camadaMapa);
     const idx=fotos.findIndex(x=>x.id===f.id);
-    marca.bindPopup(`<div class="pop-mini"><div id="popimg-${f.id}"></div><b>${esc(f.titulo||'Sem título')}</b><span>${esc(f.autor||'')}</span><span>${dataHoraBR(f.criadoEm)}</span>${f.local?`<span>📍 ${esc(f.local)}</span>`:''}<button onclick="irPara(${idx});fecharMapa();">Ver foto</button></div>`);
+    const quando = f.tiradaEm ? dataHoraBR(f.tiradaEm)+' (foto)' : dataHoraBR(f.criadoEm)+' (envio)';
+    const origem = daFoto ? '🛰️ coordenada da própria foto' : '📱 posição de quem enviou';
+    marca.bindPopup(`<div class="pop-mini"><div id="popimg-${f.id}"></div><b>${esc(f.titulo||'Sem título')}</b><span>${esc(f.autor||'')}</span><span>${quando}</span>${f.local?`<span>📍 ${esc(f.local)}</span>`:''}<span>${origem}</span><button onclick="irPara(${idx});fecharMapa();">Ver foto</button></div>`);
     marca.on('popupopen',()=>{ carregarImagem(f.id,b=>{ const el=document.getElementById('popimg-'+f.id); if(el)el.innerHTML=`<img src="${b}" alt="">`; }); });
     if(focarId && f.id===focarId){ mapa.setView([f.lat,f.lng],14); setTimeout(()=>marca.openPopup(),350); }
   });
-  const t0=lista[0].criadoEm, t1=lista[lista.length-1].criadoEm;
-  leg.innerHTML=`${lista.length} ponto(s) no rastro, numerados na ordem em que foram enviados. `
+  const nExif=lista.filter(f=>f.fonte==='exif').length;
+  const nApar=lista.length-nExif;
+  const t0=lista[0].tiradaEm||lista[0].criadoEm;
+  const t1=lista[lista.length-1].tiradaEm||lista[lista.length-1].criadoEm;
+  leg.innerHTML=`${lista.length} ponto(s) no rastro, numerados na ordem do tempo. `
     +(t0&&t1?`De ${dataHoraBR(t0)} até ${dataHoraBR(t1)}. `:'')
-    +(semGeo?`${semGeo} foto(s) sem GPS ficaram fora do mapa. `:'')
-    +`A posição é a de quem enviou no momento do envio, não a do local retratado na foto.`;
+    +`<br><b style="color:#0f4c5c">Azul</b>: ${nExif} ponto(s) com coordenada lida da própria foto, ou seja, o lugar real onde foi tirada. `
+    +`<b style="color:#d98e3c">Laranja</b>: ${nApar} ponto(s) com a posição de quem enviou no momento do envio, que pode ser outro lugar. `
+    +(semGeo?`${semGeo} foto(s) sem posição ficaram fora do mapa.`:'');
   if(!focarId) ajustarMapa();
 }
 function ajustarMapa(){
