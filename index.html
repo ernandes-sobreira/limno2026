@@ -921,7 +921,11 @@ function selecionarArquivo(file){
   if(!file||!file.type.startsWith('image/')){toast('Selecione uma imagem.');return;}
   arquivoSel=file;
   const pv=document.getElementById('previews'); pv.innerHTML='';
-  const img=document.createElement('img'); img.src=URL.createObjectURL(file); pv.appendChild(img);
+  // preview por dataURL: objectURL revogado cedo quebra a imagem em alguns Android
+  const fr=new FileReader();
+  fr.onload=()=>{ const img=document.createElement('img'); img.src=fr.result; pv.appendChild(img); };
+  fr.onerror=()=>{ pv.innerHTML='<span style="font-size:.8rem;color:#b44">Não foi possível pré-visualizar esta imagem.</span>'; };
+  fr.readAsDataURL(file);
   dropArea.textContent=file.name;
   // tenta o EXIF antes de qualquer coisa: é a coordenada mais confiável
   lerExif(file).then(ex=>{
@@ -950,20 +954,56 @@ function pegarLocal(){
     toast('Não deu para pegar a posição: '+(err.message||'permissão negada'));
   },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
 }
-function comprimir(file){
+/* Compressão sem URL.createObjectURL no caminho crítico.
+   Tenta createImageBitmap (rápido, respeita orientação em navegador moderno);
+   se não existir ou falhar, cai para FileReader em dataURL, que é o mais compatível. */
+function carregarBitmap(file){
   return new Promise((resolve,reject)=>{
-    const img=new Image();
-    img.onload=()=>{
-      const MAX=1280; let w=img.width,h=img.height;
-      if(Math.max(w,h)>MAX){ const f=MAX/Math.max(w,h); w=Math.round(w*f); h=Math.round(h*f); }
-      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-      cv.getContext('2d').drawImage(img,0,0,w,h);
-      let q=0.8, data=cv.toDataURL('image/jpeg',q);
-      while(data.length>240000 && q>0.35){ q-=0.08; data=cv.toDataURL('image/jpeg',q); }
-      URL.revokeObjectURL(img.src); resolve(data);
-    };
-    img.onerror=reject; img.src=URL.createObjectURL(file);
+    if(window.createImageBitmap){
+      createImageBitmap(file).then(resolve).catch(()=>viaDataURL(file).then(resolve,reject));
+    } else {
+      viaDataURL(file).then(resolve,reject);
+    }
   });
+}
+function viaDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>reject(new Error('não foi possível ler o arquivo no aparelho'));
+    fr.onload=()=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=()=>reject(new Error('formato de imagem não suportado pelo navegador'));
+      img.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function comprimir(file){
+  return carregarBitmap(file).then(src=>{
+    const iw = src.width, ih = src.height;
+    if(!iw || !ih) throw new Error('imagem sem dimensão legível');
+    const MAX=1280; let w=iw, h=ih;
+    if(Math.max(w,h)>MAX){ const f=MAX/Math.max(w,h); w=Math.round(w*f); h=Math.round(h*f); }
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+    ctx.drawImage(src,0,0,w,h);
+    if(src.close) src.close();
+    let q=0.8, data=cv.toDataURL('image/jpeg',q);
+    while(data.length>240000 && q>0.35){ q-=0.08; data=cv.toDataURL('image/jpeg',q); }
+    if(!data || data.length<100) throw new Error('o navegador não conseguiu gerar a imagem reduzida');
+    return data;
+  });
+}
+/* Transforma qualquer coisa que veio de um catch em texto legível */
+function msgErro(e){
+  if(!e) return 'erro desconhecido';
+  if(typeof e==='string') return e;
+  if(e.message) return e.message;
+  if(e.target && e.target.error && e.target.error.message) return e.target.error.message;
+  if(e.type) return 'falha ao carregar a imagem ('+e.type+')';
+  return 'erro desconhecido';
 }
 function publicarFoto(){
   if(!usuario){ abrirLogin(); return; }
@@ -974,6 +1014,10 @@ function publicarFoto(){
   if(!geoSel && !confirm('Você não marcou a posição. A foto entra na galeria mas fica fora do mapa da viagem. Publicar assim mesmo?')) return;
   const btn=document.getElementById('btnPublicar'); btn.disabled=true; btn.textContent='Publicando...';
   comprimir(arquivoSel).then(base64=>{
+    if(base64.length > 900000){
+      toast('A imagem ficou grande demais mesmo após a redução. Tente outra foto.');
+      btn.disabled=false; btn.textContent='Publicar foto'; return;
+    }
     const id=refMeta.push().key;
     const meta={ titulo, autor:(usuario.displayName||'Anônimo'), uid:usuario.uid, criadoEm:firebase.database.ServerValue.TIMESTAMP };
     if(local) meta.local=local;
@@ -999,8 +1043,8 @@ function publicarFoto(){
       btn.disabled=false; btn.textContent='Publicar foto';
       document.getElementById('ovEnviar').classList.remove('open');
       setTimeout(atualizarContagemAdmin,400);
-    }).catch(err=>{ toast('Erro ao publicar: '+(err.message||err)); btn.disabled=false; btn.textContent='Publicar foto'; });
-  }).catch(err=>{ toast('Erro na imagem: '+(err.message||err)); btn.disabled=false; btn.textContent='Publicar foto'; });
+    }).catch(err=>{ toast('Erro ao publicar: '+msgErro(err)); btn.disabled=false; btn.textContent='Publicar foto'; });
+  }).catch(err=>{ toast('Erro na imagem: '+msgErro(err)); btn.disabled=false; btn.textContent='Publicar foto'; });
 }
 
 /* ---------- mapa ---------- */
