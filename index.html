@@ -187,7 +187,27 @@ input:focus,textarea:focus{border-color:var(--agua-mid)}
 .pop-mini span{display:block;font-size:.74rem;color:var(--ink-soft);margin-top:2px}
 .pop-mini button{margin-top:6px;width:100%;background:var(--agua-mid);color:#fff;border:none;border-radius:8px;padding:6px;font-size:.76rem;font-weight:800;cursor:pointer;font-family:'Source Sans 3',sans-serif}
 .leaflet-container{font-family:'Source Sans 3',sans-serif}
-.floater{position:fixed;bottom:-50px;z-index:890;font-size:2rem;pointer-events:none;animation:subir var(--dur) ease-out forwards;opacity:0;}
+.escolha-origem{display:flex;gap:8px;margin-top:4px}
+.btn-origem{flex:1;background:#fff;border:1.5px solid var(--linha);color:var(--ink);border-radius:12px;padding:14px 8px;font-size:.86rem;font-weight:800;cursor:pointer;font-family:'Source Sans 3',sans-serif;transition:all .15s;line-height:1.3}
+.btn-origem:hover{border-color:var(--agua-mid);color:var(--agua-deep)}
+.btn-origem:active{transform:scale(.97)}
+.btn-origem.ativo{background:var(--agua-clara);border-color:var(--agua-mid);color:var(--agua-deep)}
+.cam-tela{position:fixed;inset:0;z-index:400;background:#000;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .2s}
+.cam-tela.open{opacity:1;pointer-events:all}
+.cam-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;flex-shrink:0}
+.cam-x{width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:1.05rem;cursor:pointer;flex-shrink:0}
+.cam-geo{flex:1;text-align:center;color:#fff;font-size:.78rem;font-weight:800;background:rgba(255,255,255,.14);border-radius:20px;padding:8px 12px;line-height:1.3}
+.cam-geo.ok{background:rgba(63,123,84,.85)}
+.cam-geo.ruim{background:rgba(217,142,60,.85)}
+.cam-video{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000}
+.cam-video video{width:100%;height:100%;object-fit:contain}
+.cam-baixo{flex-shrink:0;padding:14px 0 26px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.cam-dica{color:rgba(255,255,255,.75);font-size:.8rem;font-weight:700;text-align:center;padding:0 20px;line-height:1.4}
+.cam-disparo{width:72px;height:72px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.35);cursor:pointer;transition:transform .12s;background-clip:padding-box}
+.cam-disparo:active{transform:scale(.9)}
+.cam-disparo:disabled{opacity:.4;cursor:not-allowed}
+@keyframes flash{0%{opacity:.9}100%{opacity:0}}
+.cam-flash{position:fixed;inset:0;background:#fff;z-index:401;pointer-events:none;animation:flash .28s ease-out forwards}
 @keyframes subir{0%{transform:translateY(0) translateX(0) rotate(0deg) scale(.6);opacity:0}12%{opacity:1}100%{transform:translateY(-105vh) translateX(var(--drift)) rotate(var(--giro)) scale(1.15);opacity:0}}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:.85rem;font-weight:700;z-index:950;transition:transform .3s;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:90vw;text-align:center}
 .toast.show{transform:translateX(-50%) translateY(0)}
@@ -263,7 +283,7 @@ input:focus,textarea:focus{border-color:var(--agua-mid)}
 <!-- Enviar foto (participante) -->
 <div class="overlay" id="ovEnviar">
   <div class="modal-box">
-    <button class="fechar" onclick="document.getElementById('ovEnviar').classList.remove('open')">✕</button>
+    <button class="fechar" onclick="fecharCamera();document.getElementById('ovEnviar').classList.remove('open')">✕</button>
     <h3>Enviar sua foto</h3>
     <p class="sub">A foto entra na galeria e o ponto marcado entra no mapa da viagem.</p>
 
@@ -272,7 +292,11 @@ input:focus,textarea:focus{border-color:var(--agua-mid)}
     <label for="pLocal">Nome do lugar (opcional)</label>
     <input type="text" id="pLocal" maxlength="60" placeholder="Ex: Baía do Sinhá Mariana">
     <label>Imagem</label>
-    <div class="drop" id="dropArea">Toque para escolher ou tirar a foto</div>
+    <div class="escolha-origem">
+      <button class="btn-origem" id="btnCamera">📸 Tirar foto agora</button>
+      <button class="btn-origem" id="btnGaleria">🖼️ Escolher da galeria</button>
+    </div>
+    <div class="drop" id="dropArea" style="display:none">Toque para escolher a imagem</div>
     <input type="file" id="fileInput" accept="image/*,.heic,.heif,image/heic,image/heif" style="display:none">
     <div class="previews" id="previews"></div>
 
@@ -348,6 +372,22 @@ input:focus,textarea:focus{border-color:var(--agua-mid)}
       <button class="btn btn-salvar" style="margin-top:12px;background:var(--agua-deep)" onclick="salvarHorarios()">Salvar horários</button>
       <div class="aviso-envio">Depois do fechamento ninguém vota, nem religando o interruptor. Envio de fotos e comentários continuam livres.</div>
     </div>
+  </div>
+</div>
+
+<!-- Câmera do app -->
+<div class="cam-tela" id="camTela">
+  <div class="cam-topo">
+    <button class="cam-x" onclick="fecharCamera()">✕</button>
+    <div class="cam-geo" id="camGeo">📍 obtendo posição…</div>
+    <button class="cam-x" id="camTrocar" onclick="trocarCamera()" title="Trocar câmera">🔄</button>
+  </div>
+  <div class="cam-video">
+    <video id="camVideo" playsinline autoplay muted></video>
+  </div>
+  <div class="cam-baixo">
+    <div class="cam-dica" id="camDica">Enquadre e toque no botão</div>
+    <button class="cam-disparo" id="camDisparo" onclick="dispararFoto()" aria-label="Tirar foto"></button>
   </div>
 </div>
 
@@ -434,7 +474,7 @@ const refReac = db.child("reacoes");
 let metaMap={}, votosMap={}, comentMap={}, reacMap={}, fotos=[];
 let imgCache={};
 let cur=0, viewerAberto=false, carregouInicial=false;
-let usuario=null, meuVoto=null, isAdmin=false, arquivoSel=null;
+let usuario=null, meuVoto=null, isAdmin=false, arquivoSel=null, fotoDaCamera=null;
 let votacaoAberta=false;
 let tsAbertura=null, tsFechamento=null, toggleManual=false, tickTimer=null;
 let geoSel=null;
@@ -615,7 +655,13 @@ window.addEventListener('pointermove',e=>{ if(dragX===null)return; dragDX=e.clie
 window.addEventListener('pointerup',()=>{ if(dragX===null)return; [...stage.children].forEach(c=>c.classList.remove('dragging')); const lim=stage.clientWidth*.12; if(dragDX<-lim)irPara(cur+1); else if(dragDX>lim)irPara(cur-1); else posicionar(); dragX=null; setTimeout(()=>dragDX=0,50); });
 document.getElementById('navL').onclick=()=>irPara(cur-1);
 document.getElementById('navR').onclick=()=>irPara(cur+1);
-document.addEventListener('keydown',e=>{ if(document.querySelector('.overlay.open'))return; if(e.key==='ArrowLeft'){irPara(cur-1);if(viewerAberto)atualizarViewer();} if(e.key==='ArrowRight'){irPara(cur+1);if(viewerAberto)atualizarViewer();} if(e.key==='Escape')fecharViewer(); });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && document.getElementById('camTela').classList.contains('open')){ fecharCamera(); return; }
+  if(document.querySelector('.overlay.open'))return;
+  if(e.key==='ArrowLeft'){irPara(cur-1);if(viewerAberto)atualizarViewer();}
+  if(e.key==='ArrowRight'){irPara(cur+1);if(viewerAberto)atualizarViewer();}
+  if(e.key==='Escape')fecharViewer();
+});
 
 /* ---------- reações ---------- */
 function montarEmojiBars(){
@@ -679,7 +725,7 @@ function atualizarBarra(){
   const lc=document.getElementById('infoLocal');
   if(f.lat!=null){
     lc.style.display='block';
-    const marcaFonte = f.fonte==='exif' ? '🛰️' : '📱';
+    const marcaFonte = f.fonte==='camera' ? '📸' : (f.fonte==='exif' ? '🛰️' : '📱');
     lc.innerHTML=marcaFonte+' '+esc(f.local||(Number(f.lat).toFixed(4)+', '+Number(f.lng).toFixed(4)))+' · ver no mapa';
     lc.onclick=()=>{ abrirMapa(f.id); };
   } else lc.style.display='none';
@@ -851,14 +897,25 @@ function converterHeic(file, aoAvisar){
 function lerExif(file){
   return new Promise(resolve=>{
     const fr=new FileReader();
-    fr.onerror=()=>resolve(null);
+    fr.onerror=()=>resolve({erro:'o navegador não conseguiu ler os bytes do arquivo'});
     fr.onload=()=>{
       try{
         const view=new DataView(fr.result);
-        if(ftypHeic(view) || ehHeic(file)){ resolve(exifDeHeif(view)); return; }
-        resolve(extrairExif(view));
+        let r;
+        if(ftypHeic(view) || ehHeic(file)){
+          r=exifDeHeif(view);
+          if(!r) { resolve({erro:'arquivo HEIC sem bloco EXIF'}); return; }
+        } else {
+          if(view.byteLength<4 || view.getUint16(0,false)!==0xFFD8){
+            resolve({erro:'não é JPEG nem HEIC, formato sem EXIF (provável PNG ou WebP)'}); return;
+          }
+          r=extrairExif(view);
+          if(!r){ resolve({erro:'JPEG sem bloco EXIF, metadados removidos'}); return; }
+        }
+        if(r.lat==null) resolve({erro:'tem EXIF, mas sem coordenada GPS gravada', dataExif:r.dataExif||null});
+        else resolve(r);
       }
-      catch(e){ resolve(null); }
+      catch(e){ resolve({erro:'falha ao interpretar os metadados: '+(e.message||e)}); }
     };
     // HEIC guarda o EXIF mais adiante que JPEG, por isso a fatia maior
     const limite = (ehHeic(file) ? 3*1024*1024 : 512*1024);
@@ -979,6 +1036,10 @@ function pintarGeoBox(){
       (geoSel.dataExif?' · tirada em '+esc(geoSel.dataExif.replace(/^(\d{4}):(\d{2}):(\d{2})/,'$3/$2/$1')):'')+
       '<br>Este é o lugar onde a foto foi tirada.</small>';
     btn.textContent='📍 Usar onde estou';
+  } else if(geoSel.fonte==='camera'){
+    txt.innerHTML='Foto tirada aqui, agora <small>'+coord+' · precisão ~'+geoSel.acc+' m'+
+      '<br>Posição capturada no mesmo instante da foto.</small>';
+    btn.textContent='↻ Refazer';
   } else {
     txt.innerHTML='Posição do aparelho agora <small>'+coord+' · precisão ~'+geoSel.acc+' m'+
       '<br>É onde você está neste momento, não necessariamente onde a foto foi tirada.</small>';
@@ -992,7 +1053,9 @@ function selecionarArquivo(file){
   const heic = ehHeic(file);
   if(!heic && !file.type.startsWith('image/')){toast('Selecione uma imagem.');return;}
   arquivoSel=file;
+  fotoDaCamera=null;
   const pv=document.getElementById('previews'); pv.innerHTML='';
+  dropArea.style.display='block';
   dropArea.textContent=file.name;
 
   if(heic){
@@ -1021,9 +1084,12 @@ function selecionarArquivo(file){
     } else {
       if(geoSel && geoSel.fonte==='exif') geoSel=null;
       pintarGeoBox();
-      const box=document.getElementById('geoBox');
-      const txt=document.getElementById('geoTxt');
-      if(!geoSel) txt.innerHTML='Esta foto não traz coordenadas<small>Sem GPS na imagem. Toque em Marcar para usar a posição do aparelho, ou publique sem mapa.</small>';
+      if(!geoSel){
+        const motivo = (ex && ex.erro) ? ex.erro : 'sem coordenada na imagem';
+        document.getElementById('geoTxt').innerHTML=
+          'Esta foto não traz coordenadas<small>Motivo: '+esc(motivo)+
+          '.<br>Use a câmera do app, ou toque em Marcar para usar a posição do aparelho.</small>';
+      }
     }
   });
 }
@@ -1039,6 +1105,133 @@ function pegarLocal(){
     toast('Não deu para pegar a posição: '+(err.message||'permissão negada'));
   },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
 }
+/* ---------- câmera dentro do app ----------
+   Vantagem sobre a galeria: a foto e a posição são capturadas no mesmo instante,
+   então não dependemos de EXIF nenhum. É o caminho confiável para o rastro.  */
+let camStream=null, camFacing='environment', camWatchId=null, camMelhorPos=null;
+
+function somDisparo(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC) return;
+    const ctx=new AC();
+    // ruído curto filtrado, parecido com obturador mecânico
+    const dur=0.09, taxa=ctx.sampleRate, n=Math.floor(taxa*dur);
+    const buf=ctx.createBuffer(1,n,taxa), dados=buf.getChannelData(0);
+    for(let i=0;i<n;i++){
+      const decai=Math.pow(1-i/n,3.2);
+      dados[i]=(Math.random()*2-1)*decai;
+    }
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const filtro=ctx.createBiquadFilter(); filtro.type='bandpass';
+    filtro.frequency.value=2600; filtro.Q.value=0.9;
+    const g=ctx.createGain(); g.gain.value=0.32;
+    src.connect(filtro); filtro.connect(g); g.connect(ctx.destination);
+    src.start();
+    src.onended=()=>{ try{ctx.close();}catch(e){} };
+  }catch(e){ /* som é enfeite, nunca deve travar a captura */ }
+}
+
+function abrirCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    toast('Este navegador não dá acesso à câmera. Use Escolher da galeria.');
+    return;
+  }
+  document.getElementById('camTela').classList.add('open');
+  iniciarStream();
+  iniciarGeoContinuo();
+}
+function iniciarStream(){
+  pararStream();
+  const cfg={ video:{ facingMode:camFacing, width:{ideal:1920}, height:{ideal:1440} }, audio:false };
+  navigator.mediaDevices.getUserMedia(cfg).then(st=>{
+    camStream=st;
+    const v=document.getElementById('camVideo');
+    v.srcObject=st; v.play().catch(()=>{});
+  }).catch(err=>{
+    const nome=err&&err.name?err.name:'';
+    let msg='Não foi possível abrir a câmera';
+    if(nome==='NotAllowedError') msg='Permissão de câmera negada. Libere nas configurações do navegador.';
+    else if(nome==='NotFoundError') msg='Nenhuma câmera encontrada neste aparelho.';
+    else if(nome==='NotReadableError') msg='A câmera está sendo usada por outro app.';
+    else msg+=': '+msgErro(err);
+    toast(msg);
+    fecharCamera();
+  });
+}
+function pararStream(){
+  if(camStream){ camStream.getTracks().forEach(t=>{try{t.stop();}catch(e){}}); camStream=null; }
+}
+function trocarCamera(){ camFacing = (camFacing==='environment'?'user':'environment'); iniciarStream(); }
+function fecharCamera(){
+  document.getElementById('camTela').classList.remove('open');
+  pararStream();
+  if(camWatchId!=null && navigator.geolocation){ navigator.geolocation.clearWatch(camWatchId); camWatchId=null; }
+}
+/* Acompanha a posição enquanto a câmera está aberta e guarda a melhor leitura,
+   porque a primeira costuma vir por antena, com centenas de metros de erro. */
+function iniciarGeoContinuo(){
+  camMelhorPos=null;
+  const el=document.getElementById('camGeo');
+  el.className='cam-geo'; el.textContent='📍 obtendo posição…';
+  if(!navigator.geolocation){ el.className='cam-geo ruim'; el.textContent='📍 sem GPS neste navegador'; return; }
+  camWatchId=navigator.geolocation.watchPosition(pos=>{
+    const acc=Math.round(pos.coords.accuracy||99999);
+    if(!camMelhorPos || acc < camMelhorPos.acc){
+      camMelhorPos={ lat:pos.coords.latitude, lng:pos.coords.longitude, acc:acc };
+    }
+    const a=camMelhorPos.acc;
+    if(a<=60){ el.className='cam-geo ok'; el.textContent='📍 precisão ~'+a+' m, boa'; }
+    else if(a<=300){ el.className='cam-geo'; el.textContent='📍 precisão ~'+a+' m, aguarde melhorar'; }
+    else { el.className='cam-geo ruim'; el.textContent='📍 precisão ~'+a+' m, saia de área coberta'; }
+  },err=>{
+    el.className='cam-geo ruim';
+    el.textContent='📍 sem posição: '+(err&&err.message?err.message:'permissão negada');
+  },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
+}
+function dispararFoto(){
+  const v=document.getElementById('camVideo');
+  if(!v || !v.videoWidth){ toast('A câmera ainda não está pronta.'); return; }
+  const btn=document.getElementById('camDisparo'); btn.disabled=true;
+
+  const MAX=1280;
+  let w=v.videoWidth, h=v.videoHeight;
+  if(Math.max(w,h)>MAX){ const f=MAX/Math.max(w,h); w=Math.round(w*f); h=Math.round(h*f); }
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  const ctx=cv.getContext('2d');
+  if(camFacing==='user'){ ctx.translate(w,0); ctx.scale(-1,1); } // desespelha selfie
+  ctx.drawImage(v,0,0,w,h);
+
+  somDisparo();
+  const fl=document.createElement('div'); fl.className='cam-flash';
+  document.body.appendChild(fl); setTimeout(()=>fl.remove(),320);
+
+  let q=0.82, data=cv.toDataURL('image/jpeg',q);
+  while(data.length>240000 && q>0.35){ q-=0.08; data=cv.toDataURL('image/jpeg',q); }
+
+  fotoDaCamera=data;
+  arquivoSel=null;
+  if(camMelhorPos){
+    geoSel={ lat:camMelhorPos.lat, lng:camMelhorPos.lng, acc:camMelhorPos.acc, fonte:'camera', dataExif:null };
+  } else {
+    geoSel=null;
+  }
+  const pv=document.getElementById('previews');
+  pv.innerHTML=''; const im=document.createElement('img'); im.src=data; pv.appendChild(im);
+  document.getElementById('dropArea').style.display='none';
+  marcarOrigem('camera');
+  fecharCamera();
+  pintarGeoBox();
+  btn.disabled=false;
+  toast(camMelhorPos?'Foto capturada com posição.':'Foto capturada, mas sem posição.');
+}
+function marcarOrigem(qual){
+  document.getElementById('btnCamera').classList.toggle('ativo',qual==='camera');
+  document.getElementById('btnGaleria').classList.toggle('ativo',qual==='galeria');
+}
+document.getElementById('btnCamera').onclick=abrirCamera;
+document.getElementById('btnGaleria').onclick=()=>{ marcarOrigem('galeria'); document.getElementById('fileInput').click(); };
+
 /* Compressão sem URL.createObjectURL no caminho crítico.
    Tenta createImageBitmap (rápido, respeita orientação em navegador moderno);
    se não existir ou falhar, cai para FileReader em dataURL, que é o mais compatível. */
@@ -1098,10 +1291,13 @@ function publicarFoto(){
   const titulo=document.getElementById('pTitulo').value.trim();
   const local=document.getElementById('pLocal').value.trim();
   if(!titulo){ toast('Dê um título ou legenda à foto.'); return; }
-  if(!arquivoSel){ toast('Escolha uma imagem.'); return; }
+  if(!arquivoSel && !fotoDaCamera){ toast('Tire uma foto ou escolha uma imagem.'); return; }
   if(!geoSel && !confirm('Você não marcou a posição. A foto entra na galeria mas fica fora do mapa da viagem. Publicar assim mesmo?')) return;
   const btn=document.getElementById('btnPublicar'); btn.disabled=true; btn.textContent='Publicando...';
-  comprimir(arquivoSel, ()=>{ btn.textContent='Convertendo HEIC...'; }).then(base64=>{
+  const preparo = fotoDaCamera
+    ? Promise.resolve(fotoDaCamera)
+    : comprimir(arquivoSel, ()=>{ btn.textContent='Convertendo HEIC...'; });
+  preparo.then(base64=>{
     if(base64.length > 900000){
       toast('A imagem ficou grande demais mesmo após a redução. Tente outra foto.');
       btn.disabled=false; btn.textContent='Publicar foto'; return;
@@ -1126,8 +1322,11 @@ function publicarFoto(){
       document.getElementById('pTitulo').value='';
       document.getElementById('pLocal').value='';
       document.getElementById('previews').innerHTML='';
-      dropArea.textContent='Toque para escolher ou tirar a foto';
-      arquivoSel=null; geoSel=null; pintarGeoBox();
+      dropArea.textContent='Toque para escolher a imagem';
+      dropArea.style.display='none';
+      marcarOrigem('');
+      document.getElementById('fileInput').value='';
+      arquivoSel=null; fotoDaCamera=null; geoSel=null; pintarGeoBox();
       btn.disabled=false; btn.textContent='Publicar foto';
       document.getElementById('ovEnviar').classList.remove('open');
       setTimeout(atualizarContagemAdmin,400);
@@ -1178,8 +1377,8 @@ function desenharMapa(focarId){
   const pontos=lista.map(f=>[f.lat,f.lng]);
   L.polyline(pontos,{color:'#2b8ca8',weight:3,opacity:.75,dashArray:'6,7'}).addTo(camadaMapa);
   lista.forEach((f,i)=>{
-    const daFoto = f.fonte==='exif';
-    const cor = daFoto ? '#0f4c5c' : '#d98e3c';
+    const confiavel = f.fonte==='exif' || f.fonte==='camera';
+    const cor = confiavel ? '#0f4c5c' : '#d98e3c';
     const marca=L.marker([f.lat,f.lng],{
       icon:L.divIcon({
         className:'',
@@ -1189,18 +1388,21 @@ function desenharMapa(focarId){
     }).addTo(camadaMapa);
     const idx=fotos.findIndex(x=>x.id===f.id);
     const quando = f.tiradaEm ? dataHoraBR(f.tiradaEm)+' (foto)' : dataHoraBR(f.criadoEm)+' (envio)';
-    const origem = daFoto ? '🛰️ coordenada da própria foto' : '📱 posição de quem enviou';
+    const origem = f.fonte==='camera' ? '📸 tirada pelo app no local'
+                 : f.fonte==='exif' ? '🛰️ coordenada da própria foto'
+                 : '📱 posição de quem enviou';
     marca.bindPopup(`<div class="pop-mini"><div id="popimg-${f.id}"></div><b>${esc(f.titulo||'Sem título')}</b><span>${esc(f.autor||'')}</span><span>${quando}</span>${f.local?`<span>📍 ${esc(f.local)}</span>`:''}<span>${origem}</span><button onclick="irPara(${idx});fecharMapa();">Ver foto</button></div>`);
     marca.on('popupopen',()=>{ carregarImagem(f.id,b=>{ const el=document.getElementById('popimg-'+f.id); if(el)el.innerHTML=`<img src="${b}" alt="">`; }); });
     if(focarId && f.id===focarId){ mapa.setView([f.lat,f.lng],14); setTimeout(()=>marca.openPopup(),350); }
   });
+  const nCam=lista.filter(f=>f.fonte==='camera').length;
   const nExif=lista.filter(f=>f.fonte==='exif').length;
-  const nApar=lista.length-nExif;
+  const nApar=lista.length-nExif-nCam;
   const t0=lista[0].tiradaEm||lista[0].criadoEm;
   const t1=lista[lista.length-1].tiradaEm||lista[lista.length-1].criadoEm;
   leg.innerHTML=`${lista.length} ponto(s) no rastro, numerados na ordem do tempo. `
     +(t0&&t1?`De ${dataHoraBR(t0)} até ${dataHoraBR(t1)}. `:'')
-    +`<br><b style="color:#0f4c5c">Azul</b>: ${nExif} ponto(s) com coordenada lida da própria foto, ou seja, o lugar real onde foi tirada. `
+    +`<br><b style="color:#0f4c5c">Azul</b>: ${nCam+nExif} ponto(s) confiáveis, sendo ${nCam} tirados pela câmera do app e ${nExif} com coordenada lida da própria foto. `
     +`<b style="color:#d98e3c">Laranja</b>: ${nApar} ponto(s) com a posição de quem enviou no momento do envio, que pode ser outro lugar. `
     +(semGeo?`${semGeo} foto(s) sem posição ficaram fora do mapa.`:'');
   if(!focarId) ajustarMapa();
