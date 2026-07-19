@@ -273,7 +273,7 @@ input:focus,textarea:focus{border-color:var(--agua-mid)}
     <input type="text" id="pLocal" maxlength="60" placeholder="Ex: Baía do Sinhá Mariana">
     <label>Imagem</label>
     <div class="drop" id="dropArea">Toque para escolher ou tirar a foto</div>
-    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <input type="file" id="fileInput" accept="image/*,.heic,.heif,image/heic,image/heif" style="display:none">
     <div class="previews" id="previews"></div>
 
     <div class="geo-box" id="geoBox">
@@ -779,20 +779,90 @@ dropArea.ondragover=e=>{e.preventDefault();dropArea.classList.add('over');};
 dropArea.ondragleave=()=>dropArea.classList.remove('over');
 dropArea.ondrop=e=>{e.preventDefault();dropArea.classList.remove('over');selecionarArquivo(e.dataTransfer.files[0]);};
 fileInput.onchange=()=>selecionarArquivo(fileInput.files[0]);
+/* ---- HEIC / HEIF ----
+   Dois problemas separados: (1) navegador não decodifica HEIC em canvas,
+   (2) a conversão descarta o EXIF. Por isso o GPS é lido do arquivo ORIGINAL,
+   percorrendo as caixas ISOBMFF, antes de qualquer conversão.              */
+function ehHeic(file){
+  const n=(file.name||'').toLowerCase();
+  const t=(file.type||'').toLowerCase();
+  return t.indexOf('heic')>=0 || t.indexOf('heif')>=0 || /\.(heic|heif)$/.test(n);
+}
+/* Confere o box 'ftyp' no início do arquivo, que é mais confiável que a extensão */
+function ftypHeic(view){
+  try{
+    if(view.byteLength<12) return false;
+    if(view.getUint32(4,false)!==0x66747970) return false; // 'ftyp'
+    let marca='';
+    for(let i=8;i<12;i++) marca+=String.fromCharCode(view.getUint8(i));
+    return ['heic','heix','hevc','heim','heis','hevm','hevs','mif1','msf1'].indexOf(marca)>=0;
+  }catch(e){ return false; }
+}
+/* Percorre as caixas ISOBMFF até achar o payload EXIF e devolve o offset do TIFF */
+function exifDeHeif(view){
+  const N=view.byteLength;
+  /* O bloco EXIF em HEIF começa com um offset de 4 bytes seguido de "Exif\0\0".
+     Procurar a assinatura direto é robusto contra variações de meta/iloc.      */
+  for(let i=0;i<N-10;i++){
+    if(view.getUint8(i)===0x45 && view.getUint8(i+1)===0x78 &&
+       view.getUint8(i+2)===0x69 && view.getUint8(i+3)===0x66 &&
+       view.getUint8(i+4)===0x00 && view.getUint8(i+5)===0x00){
+      const tiff=i+6;
+      if(tiff+8>N) continue;
+      const marca=view.getUint16(tiff,false);
+      if(marca===0x4949 || marca===0x4D4D){
+        const r=lerTiff(view,tiff);
+        if(r) return r;
+      }
+    }
+  }
+  return null;
+}
+
+let heicLibPromise=null;
+function carregarHeicLib(){
+  if(window.heic2any) return Promise.resolve(window.heic2any);
+  if(heicLibPromise) return heicLibPromise;
+  heicLibPromise=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    s.onload=()=>{ window.heic2any?resolve(window.heic2any):reject(new Error('conversor HEIC não inicializou')); };
+    s.onerror=()=>{ heicLibPromise=null; reject(new Error('não foi possível baixar o conversor HEIC, verifique a internet')); };
+    document.head.appendChild(s);
+  });
+  return heicLibPromise;
+}
+/* Converte HEIC em Blob JPEG. Demora alguns segundos em celular modesto. */
+function converterHeic(file, aoAvisar){
+  if(aoAvisar) aoAvisar();
+  return carregarHeicLib().then(lib=>lib({ blob:file, toType:'image/jpeg', quality:0.85 }))
+    .then(res=>{
+      const blob=Array.isArray(res)?res[0]:res;
+      if(!blob || !blob.size) throw new Error('a conversão do HEIC não produziu imagem');
+      return blob;
+    });
+}
+
 /* ---- leitura de EXIF direto do arquivo, sem biblioteca ----
    Percorre os segmentos JPEG até achar o APP1 com "Exif\0\0", lê o TIFF header
    para descobrir a ordem dos bytes, acha o ponteiro do GPS IFD (tag 0x8825)
-   e extrai latitude, longitude, referências N/S e E/W e a data original.     */
+   e extrai latitude, longitude, referências N/S e E/W e a data original.
+   Se o arquivo for HEIF, usa o caminho de caixas ISOBMFF.                    */
 function lerExif(file){
   return new Promise(resolve=>{
     const fr=new FileReader();
     fr.onerror=()=>resolve(null);
     fr.onload=()=>{
-      try{ resolve(extrairExif(new DataView(fr.result))); }
+      try{
+        const view=new DataView(fr.result);
+        if(ftypHeic(view) || ehHeic(file)){ resolve(exifDeHeif(view)); return; }
+        resolve(extrairExif(view));
+      }
       catch(e){ resolve(null); }
     };
-    // 512 KB do início costuma conter todo o bloco EXIF
-    fr.readAsArrayBuffer(file.slice(0, 512*1024));
+    // HEIC guarda o EXIF mais adiante que JPEG, por isso a fatia maior
+    const limite = (ehHeic(file) ? 3*1024*1024 : 512*1024);
+    fr.readAsArrayBuffer(file.slice(0, limite));
   });
 }
 function extrairExif(view){
@@ -918,15 +988,30 @@ function pintarGeoBox(){
 }
 
 function selecionarArquivo(file){
-  if(!file||!file.type.startsWith('image/')){toast('Selecione uma imagem.');return;}
+  if(!file){toast('Selecione uma imagem.');return;}
+  const heic = ehHeic(file);
+  if(!heic && !file.type.startsWith('image/')){toast('Selecione uma imagem.');return;}
   arquivoSel=file;
   const pv=document.getElementById('previews'); pv.innerHTML='';
-  // preview por dataURL: objectURL revogado cedo quebra a imagem em alguns Android
-  const fr=new FileReader();
-  fr.onload=()=>{ const img=document.createElement('img'); img.src=fr.result; pv.appendChild(img); };
-  fr.onerror=()=>{ pv.innerHTML='<span style="font-size:.8rem;color:#b44">Não foi possível pré-visualizar esta imagem.</span>'; };
-  fr.readAsDataURL(file);
   dropArea.textContent=file.name;
+
+  if(heic){
+    pv.innerHTML='<span style="font-size:.8rem;color:#5f7580;font-weight:700">Convertendo HEIC, aguarde…</span>';
+    converterHeic(file).then(blob=>{
+      const fr=new FileReader();
+      fr.onload=()=>{ pv.innerHTML=''; const img=document.createElement('img'); img.src=fr.result; pv.appendChild(img); };
+      fr.onerror=()=>{ pv.innerHTML='<span style="font-size:.8rem;color:#b44">Convertido, mas sem pré-visualização.</span>'; };
+      fr.readAsDataURL(blob);
+    }).catch(err=>{
+      pv.innerHTML='<span style="font-size:.8rem;color:#b44">Não foi possível converter este HEIC: '+esc(msgErro(err))+'</span>';
+    });
+  } else {
+    // preview por dataURL: objectURL revogado cedo quebra a imagem em alguns Android
+    const fr=new FileReader();
+    fr.onload=()=>{ const img=document.createElement('img'); img.src=fr.result; pv.appendChild(img); };
+    fr.onerror=()=>{ pv.innerHTML='<span style="font-size:.8rem;color:#b44">Não foi possível pré-visualizar esta imagem.</span>'; };
+    fr.readAsDataURL(file);
+  }
   // tenta o EXIF antes de qualquer coisa: é a coordenada mais confiável
   lerExif(file).then(ex=>{
     if(ex && ex.lat!=null){
@@ -979,8 +1064,11 @@ function viaDataURL(file){
     fr.readAsDataURL(file);
   });
 }
-function comprimir(file){
-  return carregarBitmap(file).then(src=>{
+function comprimir(file, aoAvisar){
+  const preparo = (ehHeic(file) || file.__forcarHeic)
+    ? converterHeic(file, aoAvisar)
+    : Promise.resolve(file);
+  return preparo.then(carregarBitmap).then(src=>{
     const iw = src.width, ih = src.height;
     if(!iw || !ih) throw new Error('imagem sem dimensão legível');
     const MAX=1280; let w=iw, h=ih;
@@ -1013,7 +1101,7 @@ function publicarFoto(){
   if(!arquivoSel){ toast('Escolha uma imagem.'); return; }
   if(!geoSel && !confirm('Você não marcou a posição. A foto entra na galeria mas fica fora do mapa da viagem. Publicar assim mesmo?')) return;
   const btn=document.getElementById('btnPublicar'); btn.disabled=true; btn.textContent='Publicando...';
-  comprimir(arquivoSel).then(base64=>{
+  comprimir(arquivoSel, ()=>{ btn.textContent='Convertendo HEIC...'; }).then(base64=>{
     if(base64.length > 900000){
       toast('A imagem ficou grande demais mesmo após a redução. Tente outra foto.');
       btn.disabled=false; btn.textContent='Publicar foto'; return;
